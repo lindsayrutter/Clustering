@@ -1,0 +1,75 @@
+{\rtf1\ansi\ansicpg1252\cocoartf1265\cocoasubrtf210
+{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+\margl1440\margr1440\vieww8960\viewh12320\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural
+
+\f0\b\fs24 \cf0 F/DR \'97> NR/DU \'97> NU
+\b0 \
+WORKER \'97> WORKER/QUEEN \'97> QUEEN\
+\
+
+\fs28 6 replicates for 5 groups \
+F = (WORKERS) // Drumming, Nutrition restricted\
+DR = (WORKERS) // Drumming, Nutrition restricted\
+NR = (WORKER/QUEEN) No drumming, Nutrition restricted\
+DU = (WORKER/QUEEN) Drumming, Nutrition unrestricted\
+NU = (QUEEN) // No drumming, Nutrition unresisted\
+\
+DR and NU // make scatterplot matrices\
+F and NU // make scatterplot matrices (transparency, alpha blending)\
+	- unnormalized and normalized (all 30 samples)\
+\
+Factor 1- Y/N\
+Factor 2 - Y/N\
+Interaction12\
+Phenotype\
+\
+GLM\
+u = d + n + dn \
+\
+\
+ask toth:\
+- 6 different wasps?\
+\
+- This might be more about significance testing. Clustering will be a stab in the dark\
+library(edgeR)\
+significance testing\
+edgeR protocol paper\
+\
+- Normalize all 30 samples\
+	- Might have to remove junk samples at this point\
+- Side by side boxplots of the raw 30 samples (see how much normalization needs to be done)\
+- Side by size boxplots manually (to save time, possibly)\
+	- 
+\b tidyR
+\b0  (make 2 columns of sample label and count)\
+		- plot sample on horizontal axis and count on vertical\
+		- gather() function in tidyR\
+\
+1) Make boxplot of raw 30 samples (use log scale because each samples has a very different maximum read count) (F2 has very large value, NU.3 does not have any large values)\
+- ggparcoord(countTableWasp, columns=1:ncol(countTableWasp), alphaLines=0, boxplot=TRUE, scale="globalminmax") + coord_flip() + scale_y_log10()\
+- NU.3 may be problematic, rest should be okay with a bit of normalization\
+\
+-betweenLaneNormalization\
+	-all other norm methods stretch 5 num summaries to be the same across samples\
+	- but bLN makes the distributions for all samples the same\
+\
+- check that it looks reasonable, and reps look more similar than treatments (with scatmat). do them pairwise.\
+\
+- if looks strange, drop samples, and renormalize\
+\
+\
+- interaction plots for the top genes of the lists\
+\
+\
+- make replication plot for top 1000 genes\
+blue = unrestricted\
+red = restricted\
+-1 = drumming\
++1 = not drumming\
+\
+fit 2 factor model with interaction (look at protocol paper to work out how to do that). used normalized data.\
+check dispersion (edgeR paper has suggestions on checking dispersion)\
+\
+}

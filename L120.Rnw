@@ -1,0 +1,296 @@
+\documentclass{article}
+\usepackage{float, hyperref}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{pgffor}
+
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+
+<<options, echo=FALSE>>=
+nClusters = 30
+library(knitr)
+opts_chunk$set(concordance=TRUE)
+@
+
+<<echo=FALSE,eval=TRUE>>=
+library(rtracklayer)
+library(Rsamtools)
+library(grid)
+library(GenomicAlignments)
+library(ggplot2)
+library(GGally)
+library(edgeR)
+library(stringr)
+library(EDASeq)
+library(dplyr)
+library(matrixStats)
+library(gridExtra)
+library(reshape2)
+library(scales)
+
+plotName = "DR_DU"
+outDir = "Clustering_DR_DU"
+dir.create(paste(getwd(),"/",outDir,sep=""))
+@
+
+%\author{Lindsay Rutter}
+\title{Cluster Analysis of Wasp DR DU}
+
+\maketitle
+
+<<echo=FALSE>>=
+rm(list=ls())
+load("All_wasp.rda")
+countTableWasp = countTable
+y <- DGEList(counts=countTableWasp)
+@
+
+<<echo=FALSE>>=
+# Now try to threshold count number and normalize on the six samples
+#L120 (157691, 12)
+L120 = y[ , grepl( c("D") , colnames(y$counts))]
+
+#L120 is (39886, 6)
+# Make sure each gene has at least one count in at least half of the six samples
+L120 <- L120[rowSums(L120$counts>1)>=ncol(L120)/2,]
+# Now positive and negative
+cpm.L120.new <- cpm(L120, TRUE, TRUE)
+cpm.L120.norm <- betweenLaneNormalization(cpm.L120.new, which="full", round=FALSE)
+L120 = cpm.L120.norm
+
+RowSD = function(x) {
+  sqrt(rowSums((x - rowMeans(x))^2)/(dim(x)[2] - 1))
+}
+
+L120t = L120
+L120 = as.data.frame(L120t)
+L120 = mutate(L120, mean = (DR.1+DR.2+DR.3+DR.4+DR.5+DR.6+DU.1+DU.2+DU.3+DU.4+DU.5+DU.6)/ncol(L120), stdev = RowSD(cbind(DR.1,DR.2,DR.3,DR.4,DR.5,DR.6,DU.1,DU.2,DU.3,DU.4,DU.5,DU.6)))
+rownames(L120)=rownames(L120t)
+# L120 = (39120, 8)
+
+# The first quartile threshold of mean counts across the 5 samples
+q1T = as.numeric(summary(L120$mean)["1st Qu."])
+L120q1 = subset(L120,mean>q1T)
+# The first quartile threshold of standard deviation across the 5 samples
+q1Ts = as.numeric(summary(L120q1$stdev)["1st Qu."])
+# L120q1 (22439, 14)
+L120q1 = subset(L120q1,stdev>q1Ts)
+# filt (17447, 14)
+filt = subset(L120,mean<=q1T|stdev<=q1Ts)
+# plotting purposes only
+#ind = seq(1, nrow(L120), by=10)
+#L120Plot=L120[ind, ]
+@
+
+<<echo=FALSE>>=
+model = loess(mean ~ stdev, data=L120q1)
+# L120q1 (9624, 14)
+L120q1 = L120q1[which(sign(model$residuals) == 1),]
+
+L120q1 = L120q1[,1:(ncol(L120q1)-2)]
+L120q1s = t(apply(as.matrix(L120q1), 1, scale))
+colnames(L120q1s)=colnames(L120q1)
+colnames(L120q1)=colnames(L120q1) 
+filt = filt[,1:(ncol(filt)-2)]
+colnames(filt)=colnames(L120q1)
+# filt (17447, 12)
+filt = rbind(filt,L120q1[which(sign(model$residuals) == -1),])
+# filt (30262, 12)
+filts = t(apply(as.matrix(filt), 1, scale))
+colnames(filts)=colnames(L120q1)
+colnames(filt)=colnames(L120q1)
+@
+
+<<echo=FALSE>>=
+# L120q1s (9809, 6)
+dendo = L120q1s
+rownames(dendo) = NULL
+# Euclidean distance between rows of matrix
+d = dist(as.matrix(dendo))
+# Hierarchical clustering using ward.D linkage
+hc = hclust(d, method="ward.D")
+plotName = "DR_DU_Dendogram"
+outDir = "Clustering_DR_DU"
+jpeg(file = paste(getwd(), "/", outDir, "/", plotName, "_.jpg", sep=""))
+plot(hc,main=plotName, xlab=NA, sub=NA)
+invisible(dev.off())
+
+scatmat(L120) # manually saved
+scatmat(L120q1s) #error: "Error in if (ncol(dn) == 0) { : argument is of length zero"
+@
+
+%\begin{figure}[H]
+%\centering
+%<<echo=FALSE>>=
+%plotName = "DR_DU"
+%plot(hc,main=paste(plotName, "Dendogram"), xlab=NA, sub=NA)
+%
+%\end{figure}
+
+%%%%%%%%%%%%%%%%%%%% PLOT CLUSTERS %%%%%%%%%%%%%%%%%%%%%
+
+<<echo=FALSE,eval=TRUE,results='asis'>>=
+getPCP <- function(nC){
+
+plotName = "DR_DU"
+outDir = "Clustering_DR_DU"
+
+set.seed(1)
+colList = scales::hue_pal()(nC+1)
+k = cutree(hc, k=nC)
+###########################
+plot_clusters = lapply(1:nC, function(i){
+  x = as.data.frame(L120q1s[which(k==i),])
+  nGenes = nrow(x)
+  x$cluster = "color"
+  x$cluster2 = factor(x$cluster)
+  xNames = rownames(x)
+  write.table(xNames, file = paste(getwd(), "/", outDir, "/", plotName, "_", nC, "_", i, ".txt", sep=""), sep=",", row.names=FALSE, col.names=FALSE, quote=FALSE)  
+  p = ggparcoord(x, columns=1:12, groupColumn=14, scale="globalminmax", alphaLines = 0.2) + xlab(paste("Cluster ", i, " (n=", format(nGenes, big.mark=",", scientific=FALSE), ")",sep="")) + ylab("Count") + theme(legend.position = "none", axis.title=element_text(size=12), axis.text=element_text(size=12)) + scale_colour_manual(values = c("color" = colList[i+1]))
+  fileName = paste(getwd(), "/", outDir, "/", plotName, "_", nC, "_", i, ".jpg", sep="")
+  jpeg(fileName)
+  plot(p)
+  invisible(dev.off())
+  p
+})
+###########################
+  filts = as.data.frame(filts)
+  filts$cluster = "color"
+  filts$cluster2 = factor(filts$cluster)
+  nGenes = nrow(filts)
+  plot_filtered = ggparcoord(filts, columns=1:12, groupColumn=14, scale="globalminmax", alphaLines = 0.01) + xlab(paste("Filtered (n=", format(nGenes, big.mark=",", scientific=FALSE), ")",sep="")) + ylab("Count") + theme(legend.position = "none", axis.title=element_text(size=12), axis.text=element_text(size=12)) + scale_colour_manual(values = c("color" = colList[1]))
+###########################
+  jpeg(file = paste(getwd(), "/", outDir, "/", plotName, "_", nC, ".jpg", sep=""), height = 200 * ceiling((nC+1)/3), width = min(200 * (nC+1), 600))
+  # We allow up to 4 (now 3) plots in each column
+  p = do.call("grid.arrange", c(append(plot_clusters, list(plot_filtered)), ncol=3)) #change from 4 to 3 ceiling(nC/3)
+  invisible(dev.off())
+}
+@
+
+<<echo=FALSE,eval=TRUE,results='asis'>>=
+for (i in 2:30){
+  getPCP(i)
+}
+@
+
+\begin{center}
+\foreach \i in {2,3,...,15} {
+  \includegraphics[width=0.99\textwidth]{Clustering_DR_DU/DR_DU_\i}
+  \captionof{figure}{Parallel coordinate plot of the normalized DR_DU read counts across \i\ clusters}
+}
+\end{center}
+
+%%%%%%%%%%%%%%%%%%%%%%%%% PLOT SCATTERPLOTS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+<<echo=FALSE,eval=TRUE,results='asis'>>=
+getPCP <- function(nC){
+
+plotName = "DR_DU"
+outDir = "Clustering_DR_DU"
+
+set.seed(1)
+colList = scales::hue_pal()(nC+1)
+k = cutree(hc, k=nC)
+###########################
+plot_clusters = lapply(1:nC, function(i){
+  x = as.data.frame(L120q1s[which(k==i),])
+  nGenes = nrow(x)
+  x$cluster = "color"
+  x$cluster2 = factor(x$cluster)
+  xNames = rownames(x)
+  write.table(xNames, file = paste(getwd(), "/", outDir, "/", plotName, "_", nC, "_", i, ".txt", sep=""), sep=",", row.names=FALSE, col.names=FALSE, quote=FALSE)  
+  p = ggparcoord(x, columns=1:12, groupColumn=14, scale="globalminmax", alphaLines = 0.2) + xlab(paste("Cluster ", i, " (n=", format(nGenes, big.mark=",", scientific=FALSE), ")",sep="")) + ylab("Count") + theme(legend.position = "none", axis.title=element_text(size=12), axis.text=element_text(size=12)) + scale_colour_manual(values = c("color" = colList[i+1]))
+  fileName = paste(getwd(), "/", outDir, "/", plotName, "_", nC, "_", i, ".jpg", sep="")
+  jpeg(fileName)
+  plot(p)
+  invisible(dev.off())
+  p
+})
+}
+@
+
+
+\end{document}
+
+
+%plotMultDim = function(data, cNum){
+%  k = kmeans(data,cNum)
+%  for (i in 1:cNum){
+%    x = as.data.frame(data[which(k$cluster==i),])
+%    plotMDS(x, xlab="Dim1", ylab="Dim2", main=paste("Cluster",i))
+%  }
+%}
+
+%plotMultDim(L120q1s, 2)
+%plotMultDim(L120q1s, 3)
+
+%plotClusterPar(L120q1s, 2)
+%plotClusterPar(L120q1s, 3)
+%plotClusterPar(L120q1s, 4)
+%plotClusterPar(L120q1s, 5)
+%plotScatMat(L120q1s, 2)
+%plotScatMat(L120q1s, 3)
+
+%##################### L120 SCATTERPLOT FINAL (2 CLUSTERS) ##################### 
+
+%cNum=2
+%colList = scales::hue_pal()(3)
+%data=L120q1
+%set.seed(1)
+%k = kmeans(L120q1s,cNum)
+%data$cluster = k$cluster
+%filt$cluster = rep(cNum+1,each=nrow(filt))
+%filt$cluster2 = NULL
+%data = rbind(data, filt)
+%dat = data.frame(x=c(data[,1],data[,2],data[,3]),y=c(data[,4],data[%,5],data[,6]),cluster=data[,7])
+%ggplot(dat,aes(x,y))+geom_point(aes(colour = factor(cluster), alpha=0.5)) +scale_colour_discrete(labels = c(paste("Cluster 1 (n=", c1N,")"), paste("Cluster 2 (n=", c2N,")"), paste("Filtered (n=", fN,")"))) + xlab("Fe- Read Count")+ylab("Fe+ Read Count")+theme(legend.position=c("bottom"), legend.text=element_text(size=12)) + ggtitle("All L120 Replicates Fe+/-") + labs(colour = "") + guides(alpha = FALSE)+theme(legend.title=element_blank()) + geom_abline(slope=1, intercept=0)
+
+%##################### L120: SCAT MAT ON 3 (CLUSTERS) ##########################
+
+%cNum=3
+%data=L120q1
+%set.seed(1)
+%k = kmeans(L120q1s,cNum)
+%colList = c("#bababa","#520090", "#bababa")
+%data$cluster = k$cluster
+%dat1 = data[which(data$cluster ==1),]
+%dat2 = data[which(data$cluster ==2),]
+%dat3 = data[which(data$cluster ==3),]
+%data = rbind(dat2, dat3, dat1)
+%data$cluster = factor(data$cluster)
+%levels(data$cluster) = c(colList)
+%scatmat(data, columns=1:6, color="cluster") + scale_color_manual(values = levels(data$cluster), labels = c("Clusters 1-2","Cluster 3")) + theme(legend.position=c("bottom"), legend.text=element_text(size=12)) + ggtitle("L120 Replicates Fe+/-") +theme(legend.title=element_blank())
+%##### SWITCH ORDERING #####
+%data = rbind(dat1, dat3, dat2)
+%data$cluster = factor(data$cluster)
+%levels(data$cluster) = c(colList)
+%scatmat(data, columns=1:6, color="cluster") + scale_color_manual(values = levels(data$cluster), labels = c("Clusters 1-2","Cluster 3")) + theme(legend.position=c("bottom"), legend.text=element_text(size=12)) + ggtitle("L120 Replicates Fe+/-") +theme(legend.title=element_blank())
+
+%par(pty="s")
+%mds <- plotMDS(cpm.y.new)
+
+% scatmat(data.frame(cpm.y.new)[,c(9,13,14,12,16,17)])
+
+
+%\begin{figure}[H]
+% \centering
+%<<fig=TRUE, echo=TRUE>>=
+%scatmat(data.frame(cpm.y.new)[,c(9,13,14,12,16,17)])
+%@
+% \caption{Scatterplot matrix of the six samples of leaves from 120 minutes, where each of scatterplot matrix compares two of the three replicates. If the 120-minute leaves samples are high quality, then we would expect replicates to have read counts centered on the diagonal x=y line, and non-relicates to deviate somewhat from the diagonal x=y line. Indeed, this is what we see, as the bottom-left nine plots (non-replicates) appear much thicker around the x=y line than the other plots (replicates).}
+% \label{scatMatL20}
+%\end{figure}
+
+%I can test the sufficiency of the normalization process applied by producing side-by-side boxplots, as shown in Figure \ref{boxplotL20n1}.
+
+%\begin{figure}[H]
+% \centering
+%<<fig=TRUE, echo=TRUE>>=
+%ggparcoord(data.frame(cpm.y.new), columns=1:17, alphaLines=0, boxplot=TRUE, scale="globalminmax") + coord_flip()
+%@
+% \caption{Boxplot of the 17 leaves samples, after using RLE scaling factor method for normalization. Since we only expect a handful of genes to show differential expression, we expect the samples to be mostly similar, and we do here, as the median values and IQR ranges are comparable across the samples.}
+% \label{boxplotL20n1}
+%\end{figure}
