@@ -13,6 +13,7 @@ library(matrixStats)
 library(gridExtra)
 library(reshape2)
 library(scales)
+library(tidyr)
 
 load("All_wasp.rda")
 
@@ -21,7 +22,8 @@ load("All_wasp.rda")
 
 myVec = c("DR", "DU", "F", "NR", "NU")
 myCol = c(which(colnames(countTable) == grep('DR', colnames(countTable), value=TRUE)), which(colnames(countTable) == grep('DU', colnames(countTable), value=TRUE)))
-#scatmat(countTable, columns=1:3, alpha = 0.01) + ggtitle("")
+#ScatMat-DUDUR-Orig.png
+scatmat(countTable, columns=myCol, alpha = 0.01)
 
 listcond = rep(c("DR","DU","F","NR","NU"),each= 6)
 # create DGEList object
@@ -29,17 +31,195 @@ d = DGEList(counts=countTable, group=listcond)
 # estimate normalization factors
 d = calcNormFactors(d)
 
-# MDS plot
+# MDSplot-Orig.png
 plotMDS(d, labels=colnames(countTable), col = c("darkgreen","blue")[factor(listcond)])
 
 # estimate tagwise dispersion
 d = estimateCommonDisp(d)
 d = estimateTagwiseDisp(d)
+# Now, str(d) has raw read counts, norm factors, lib.size, and more
 
-#mean-variance of tagwise dispersion
+#MeanVarplot-Orig.png
+# This function is useful for exploring the mean-variance relationship in the data. Raw variances are, for each gene, the pooled variance of the counts from each sample, divided by a scaling factor (by default the effective library size). The function will plot the average raw variance for genes split into nbins bins by overall expression level. The averages are taken on the square-root scale as for count data the arithmetic mean is upwardly biased. A line showing the Poisson mean-variance relationship (mean equals variance) is always shown.
 plotMeanVar(d, show.tagwise.vars=TRUE, NBline=TRUE)
 
-#plotBCV
+#BCVplot-Orig.png
+# Plots the tagwise biological coefficient of variation (square root of dispersions) against log2-CPM.
 plotBCV(d)
 
-DUDUR = exactTest(d, pair=c("DU","DR"))
+# Test for differential expression
+# Compute genewise exact tests for differences in the means between two groups of negative-binomially distributed counts. The functions accept two groups of count libraries, and a test is performed for each row of data. For each row, the test is conditional on the sum of counts for that row. No genes passed FDR correction
+de = exactTest(d, pair=c("NU","DR"))
+
+#Use the topTags function to present a tabular summary of the differential expression statistics (note that topTags operates on the output of exactTest. This automatically sorts by ascending p-value, and creates an FDR column (by dividing p-value by the number of genes)
+tt = topTags(de, n=nrow(d))
+head(tt$table)
+
+# Inspect the depth-adjusted reads per million for some of the top differentially expressed genes (just dividing each read count by 1/millionth lib.size)
+nc = cpm(d, normalized.lib.sizes=TRUE)
+rn = rownames(tt$table)
+# Sorted in order of lowest FDR from DE comparison
+head(nc[rn,order(listcond)],5)
+
+# PlotSmear-Orig.png
+# Create a graphical summary, such as an M (log-fold change) versus A (log-average expression) plot, here showing the genes selected as differentially expressed with a 5% false discovery rate. There were none in this dataset!
+deg = rn[tt$table$FDR < .05]
+plotSmear(d, de.tags=deg)
+
+# Would save file
+write.csv(tt$table, file="toptags_edgeR.csv")
+
+########## Is there any step in the edgeR package where genes are eliminated for low mean and/or stdev read counts? ##########
+
+d2 <- DGEList(counts=countTable)
+# 38,280 genes (from 157,691).
+#d2 <- d2[rowSums(d2$counts>1)>=ncol(d2)/2,]
+# 52,564 genes (from 157,691). In edgeR, it is recommended to remove features without at least 1 read per million in n of the samples, where n is the size of the smallest group of replicates
+d2 <- d2[rowSums(d2$counts>1)>=6,]
+
+# Took too long as well
+#d2plot = as.data.frame(d2[[1]])
+#d2plot = gather(d2plot)
+#ggplot(d2plot, aes(factor(value), key)) + geom_boxplot()
+
+# Now positive and negative
+cpm.d2.new <- cpm(d2, TRUE, TRUE)
+cpm.d2.norm <- betweenLaneNormalization(cpm.d2.new, which="full", round=FALSE)
+d2 = cpm.d2.norm
+
+RowSD = function(x) {
+  sqrt(rowSums((x - rowMeans(x))^2)/(dim(x)[2] - 1))
+}
+
+d2t = d2
+d2 = as.data.frame(d2t)
+d2 = mutate(d2, mean = (DR.1+DR.2+DR.3+DR.4+DR.5+DR.6+DU.1+DU.2+DU.3+DU.4+DU.5+DU.6+F.1+F.2+F.3+F.4+F.5+F.6+NR.1+NR.2+NR.3+NR.4+NR.5+NR.6+NU.1+NU.2+NU.3+NU.4+NU.5+NU.6)/ncol(d2), stdev = RowSD(cbind(DR.1,DR.2,DR.3,DR.4,DR.5,DR.6,DU.1,DU.2,DU.3,DU.4,DU.5,DU.6,F.1,F.2,F.3,F.4,F.5,F.6,NR.1,NR.2,NR.3,NR.4,NR.5,NR.6,NU.1,NU.2,NU.3,NU.4,NU.5,NU.6)))
+rownames(d2)=rownames(d2t)
+
+# The first quartile threshold of mean counts across the 5 samples
+q1T = as.numeric(summary(d2$mean)["1st Qu."])
+# (39,427, 31)
+d2q1 = subset(d2,mean>q1T)
+# The first quartile threshold of standard deviation across the 5 samples
+q1Ts = as.numeric(summary(d2q1$stdev)["1st Qu."])
+# L120q1 (29572, 31)
+d2q1 = subset(d2q1,stdev>q1Ts)
+# filt (22992, 31)
+filt = subset(d2,mean<=q1T|stdev<=q1Ts)
+
+model = loess(mean ~ stdev, data=d2q1)
+# (11855, 32)
+d2q1 = d2q1[which(sign(model$residuals) == 1),]
+
+d2q1 = d2q1[,1:(ncol(d2q1)-2)]
+d2q1s = t(apply(as.matrix(d2q1), 1, scale))
+colnames(d2q1s)=colnames(d2q1)
+colnames(d2q1)=colnames(d2q1) 
+filt = filt[,1:(ncol(filt)-2)]
+colnames(filt)=colnames(d2q1)
+# filt (40709, 32)
+filt = rbind(filt,d2q1[which(sign(model$residuals) == -1),])
+# filt (40709, 32)
+filts = t(apply(as.matrix(filt), 1, scale))
+colnames(filts)=colnames(d2q1)
+colnames(filt)=colnames(d2q1)
+
+#Boxplot-d2q1.png
+# Looks better than d2q1s.png (only strange one is NU.3)
+ggparcoord(d2q1, columns=1:ncol(d2q1), alphaLines=0, boxplot=TRUE, scale="globalminmax") + coord_flip() + scale_y_log10()
+
+#Boxplot-d2q1s.png
+# Does not look as good as d2q1.png (strange ones are NU.3 and F.2)
+d2q1s_Plot = as.data.frame(d2q1s)
+ggparcoord(d2q1s_Plot, columns=1:ncol(d2q1s_Plot), alphaLines=0, boxplot=TRUE, scale="globalminmax") + scale_y_log10() + coord_flip()
+
+# Removing NU.3 and starting over!
+######################################################################
+
+rm(list=ls())
+load("All_wasp.rda")
+countTable = select(countTable,-NU.3)
+d2 <- DGEList(counts=countTable)
+
+# 38,280 genes (from 157,691).
+#d2 <- d2[rowSums(d2$counts>1)>=ncol(d2)/2,]
+# 52,564 genes (from 157,691). In edgeR, it is recommended to remove features without at least 1 read per million in n of the samples, where n is the size of the smallest group of replicates
+d2 <- d2[rowSums(d2$counts>1)>=5,]
+
+# Took too long as well
+#d2plot = as.data.frame(d2[[1]])
+#d2plot = gather(d2plot)
+#ggplot(d2plot, aes(factor(value), key)) + geom_boxplot()
+
+# Now positive and negative
+cpm.d2.new <- cpm(d2, TRUE, TRUE)
+cpm.d2.norm <- betweenLaneNormalization(cpm.d2.new, which="full", round=FALSE)
+d2 = cpm.d2.norm
+
+RowSD = function(x) {
+  sqrt(rowSums((x - rowMeans(x))^2)/(dim(x)[2] - 1))
+}
+
+d2t = d2
+d2 = mutate(d2, mean = (DR.1+DR.2+DR.3+DR.4+DR.5+DR.6+DU.1+DU.2+DU.3+DU.4+DU.5+DU.6+F.1+F.2+F.3+F.4+F.5+F.6+NR.1+NR.2+NR.3+NR.4+NR.5+NR.6+NU.1+NU.2+NU.4+NU.5+NU.6)/ncol(d2), stdev = RowSD(cbind(DR.1,DR.2,DR.3,DR.4,DR.5,DR.6,DU.1,DU.2,DU.3,DU.4,DU.5,DU.6,F.1,F.2,F.3,F.4,F.5,F.6,NR.1,NR.2,NR.3,NR.4,NR.5,NR.6,NU.1,NU.2,NU.4,NU.5,NU.6)))
+rownames(d2)=rownames(d2t)
+
+# The first quartile threshold of mean counts across the 5 samples
+q1T = as.numeric(summary(d2$mean)["1st Qu."])
+# (41202, 31)
+d2q1 = subset(d2,mean>q1T)
+# The first quartile threshold of standard deviation across the 5 samples
+q1Ts = as.numeric(summary(d2q1$stdev)["1st Qu."])
+# L120q1 (30901, 31)
+d2q1 = subset(d2q1,stdev>q1Ts)
+# filt (24031, 31)
+filt = subset(d2,mean<=q1T|stdev<=q1Ts)
+
+model = loess(mean ~ stdev, data=d2q1)
+# (12262, 31)
+d2q1 = d2q1[which(sign(model$residuals) == 1),]
+
+d2q1 = d2q1[,1:(ncol(d2q1)-2)]
+d2q1s = t(apply(as.matrix(d2q1), 1, scale))
+colnames(d2q1s)=colnames(d2q1)
+colnames(d2q1)=colnames(d2q1) 
+filt = filt[,1:(ncol(filt)-2)]
+colnames(filt)=colnames(d2q1)
+# filt (42670, 29)
+filt = rbind(filt,d2q1[which(sign(model$residuals) == -1),])
+# filts (42670, 29)
+filts = t(apply(as.matrix(filt), 1, scale))
+colnames(filts)=colnames(d2q1)
+colnames(filt)=colnames(d2q1)
+
+#Boxplot-d2q1-NONU3.png
+# Looks better than d2q1s.png (only strange one is NU.3)
+ggparcoord(d2q1, columns=1:ncol(d2q1), alphaLines=0, boxplot=TRUE, scale="globalminmax") + coord_flip() + scale_y_log10()
+
+#Boxplot-d2q1s-NONU3.png
+# Does not look as good as d2q1.png (strange ones are NU.3 and F.2)
+d2q1s_Plot = as.data.frame(d2q1s)
+ggparcoord(d2q1s_Plot, columns=1:ncol(d2q1s_Plot), alphaLines=0, boxplot=TRUE, scale="globalminmax") + scale_y_log10() + coord_flip()
+
+myVec = c("DR", "DU", "F", "NR", "NU")
+for (i in 1:(length(myVec)-1)){
+  for (j in (i+1):length(myVec)){
+    type1 = myVec[i]
+    type2 = myVec[j]
+    myCol = c(grep(type1, colnames(d2q1)), grep(type2, colnames(d2q1)))
+    jpeg(file = paste(getwd(), "/", type1, "_", type2, "_ALPHA10.jpg", sep=""), height = 700, width = 700)
+    p = scatmat(d2q1, columns=myCol, alpha = 0.01)
+    dev.off()
+    jpeg(file = paste(getwd(), "/", type1, "_", type2, "_ALPHA7.jpg", sep=""), height = 700, width = 700)
+    p = scatmat(d2q1, columns=myCol, alpha = 0.007)
+    dev.off()
+    jpeg(file = paste(getwd(), "/", type1, "_", type2, "_ALPHA3.jpg", sep=""), height = 700, width = 700)
+    p = scatmat(d2q1, columns=myCol, alpha = 0.003)
+    dev.off()
+    jpeg(file = paste(getwd(), "/", type1, "_", type2, "_ALPHA1.jpg", sep=""), height = 700, width = 700)
+    p = scatmat(d2q1, columns=myCol, alpha = 0.001)
+    dev.off()    
+  }
+}
+
+
