@@ -1,7 +1,7 @@
 {\rtf1\ansi\ansicpg1252\cocoartf1265\cocoasubrtf210
 {\fonttbl\f0\fswiss\fcharset0 Helvetica;}
 {\colortbl;\red255\green255\blue255;}
-\margl1440\margr1440\vieww13880\viewh13320\viewkind0
+\margl1440\margr1440\vieww11720\viewh13320\viewkind0
 \pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural
 
 \f0\b\fs24 \cf0 F/DR \'97> NR/DU \'97> NU
@@ -14,7 +14,7 @@ F = (WORKERS) // Drumming, Nutrition restricted\
 DR = (WORKERS) // Drumming, Nutrition restricted\
 NR = (WORKER/QUEEN) // No drumming, Nutrition restricted\
 DU = (WORKER/QUEEN) // Drumming, Nutrition unrestricted\
-NU = (QUEEN) // No drumming, Nutrition unresisted\
+NU = (QUEEN) // No drumming, Nutrition unrestricted\
 \
 DR and NU // make scatterplot matrices\
 F and NU // make scatterplot matrices (transparency, alpha blending)\
@@ -71,4 +71,17 @@ red = restricted\
 fit 2 factor model with interaction (look at protocol paper to work out how to do that). used normalized data.\
 check dispersion (edgeR paper has suggestions on checking dispersion)\
 \
-}
+\
+\
+1) For soybean final report, we did normalization and removal of quartiles for just the 6 leaves\
+2) scatmat and boxplot in final report are just on cpm.y.new\
+	- ggparcoord(data.frame(cpm.y.new), columns=1:17, alphaLines=0, boxplot=TRUE, scale="globalminmax") + coord_flip()\
+	- scatmat(data.frame(cpm.y.new)[,c(9,13,14,12,16,17)])\
+	- all that was done beforehand was\
+		- cpm.y.new(TRUE, TRUE)\
+		- remove half of samples\
+		- calcNormFactors\
+		- cpm.y.new <- cpm(y, TRUE, TRUE)\
+		- mds <- plotMDS(cpm.y.new)\
+		- scatmat(data.frame(cpm.y.new)[,c(9,13,14,12,16,17)])\
+		- ggparcoord(data.frame(cpm.y.new), columns=1:17, alphaLines=0, boxplot=TRUE, scale="globalminmax") + coord_flip()}

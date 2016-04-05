@@ -1,0 +1,434 @@
+\documentclass{article}
+\usepackage{float, hyperref}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{caption}
+
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+
+\author{Lindsay Rutter}
+\title{Cluster Analysis of Wasps}
+
+\maketitle
+
+<<options, echo=FALSE>>=
+library(knitr)
+  opts_chunk$set(cache=TRUE)
+@
+
+\section*{Introduction}
+
+<<echo=FALSE>>=
+rm(list=ls())
+load("All_wasp.rda")
+all <- countTable
+# (157691, 30)
+y <- DGEList(counts=all)
+@
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+ggparcoord(data.frame(y[[1]]), columns=1:30, alphaLines=0, boxplot=TRUE, scale="globalminmax") + coord_flip()
+@
+\caption{Boxplot of all samples.}
+\label{BoxAll}
+\end{figure}
+
+<<echo=FALSE>>=
+# Make sure each gene has at least one count in at least size of reps
+y <- y[rowSums(y$counts>1)>=6,] # (52564, 30)
+y <- calcNormFactors(y, method="none")
+cpm.y.new <- cpm(y, TRUE, TRUE)
+cpm.y.norm <- betweenLaneNormalization(cpm.y.new, which="full", round=FALSE)
+y = cpm.y.norm
+@
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+ggparcoord(data.frame(y[[1]]), columns=1:30, alphaLines=0, boxplot=TRUE, scale="globalminmax") + coord_flip()
+@
+\caption{Boxplot of all samples.}
+\label{BoxAll}
+\end{figure}
+
+<<eval=FALSE>>=
+RowSD = function(x) {
+  sqrt(rowSums((x - rowMeans(x))^2)/(dim(x)[2] - 1))
+}
+
+yt = y
+y = as.data.frame(yt)
+y = mutate(y, mean = (DR.1+DR.2+DR.3+DR.4+DR.5+DR.6+DU.1+DU.2+DU.3+DU.4+DU.5+DU.6)/ncol(y), stdev = RowSD(cbind(DR.1,DR.2,DR.3,DR.4,DR.5,DR.6,DU.1,DU.2,DU.3,DU.4,DU.5,DU.6)))
+rownames(y)=rownames(yt)
+
+# The first quartile threshold of mean counts across the 5 samples
+q1T = as.numeric(summary(y$mean)["1st Qu."])
+yq1 = subset(y,mean>q1T)
+q1Ts = as.numeric(summary(yq1$stdev)["1st Qu."])
+# (29565, 32)
+yq1 = subset(yq1,stdev>q1Ts)
+# (22999, 32)
+filt = subset(y,mean<=q1T|stdev<=q1Ts)
+
+model = loess(mean ~ stdev, data=ALLq1)
+ALLq1 = ALLq1[which(sign(model$residuals) == 1),]
+ALLq1 = ALLq1[,1:29]
+ALLq1s = t(apply(as.matrix(ALLq1), 1, scale))
+colnames(ALLq1s)=c("[1]30R-","[2]30R-","[3]30R-","[1]30R+","[2]30R+","[3]30R+","[1]60R-","[2]60R-","[3]60R-","[1]60R+","[2]60R+","[3]60R+","[1]120R-","[2]120R-","[1]120R+","[2]120R+","[1]30L-","[2]30L-","[1]30L+","[2]30L+","[3]30L+","[1]60L-","[2]60L-","[2]60L+","[3]60L+","[1]120L-","[2]120L-","[1]120L+","[2]120L+")
+colnames(ALLq1)=c("[1]30R-","[2]30R-","[3]30R-","[1]30R+","[2]30R+","[3]30R+","[1]60R-","[2]60R-","[3]60R-","[1]60R+","[2]60R+","[3]60R+","[1]120R-","[2]120R-","[1]120R+","[2]120R+","[1]30L-","[2]30L-","[1]30L+","[2]30L+","[3]30L+","[1]60L-","[2]60L-","[2]60L+","[3]60L+","[1]120L-","[2]120L-","[1]120L+","[2]120L+")
+colnames(filt)=c("[1]30R-","[2]30R-","[3]30R-","[1]30R+","[2]30R+","[3]30R+","[1]60R-","[2]60R-","[3]60R-","[1]60R+","[2]60R+","[3]60R+","[1]120R-","[2]120R-","[1]120R+","[2]120R+","[1]30L-","[2]30L-","[1]30L+","[2]30L+","[3]30L+","[1]60L-","[2]60L-","[2]60L+","[3]60L+","[1]120L-","[2]120L-","[1]120L+","[2]120L+")
+filt = filt[,1:29]
+filt = rbind(filt,ALLq1[which(sign(model$residuals) == -1),])
+filts = t(apply(as.matrix(filt), 1, scale))
+colnames(filts)=c("[1]30R-","[2]30R-","[3]30R-","[1]30R+","[2]30R+","[3]30R+","[1]60R-","[2]60R-","[3]60R-","[1]60R+","[2]60R+","[3]60R+","[1]120R-","[2]120R-","[1]120R+","[2]120R+","[1]30L-","[2]30L-","[1]30L+","[2]30L+","[3]30L+","[1]60L-","[2]60L-","[2]60L+","[3]60L+","[1]120L-","[2]120L-","[1]120L+","[2]120L+")
+
+########################### ALL DENDOGRAM ############################
+
+dendo = ALLq1s
+rownames(dendo) = NULL
+d = dist(as.matrix(dendo))
+hc = hclust(d, method="ward.D")
+@
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+plot(hc,main="Dendogram of all samples", xlab=NA, sub=NA)
+@
+\caption{The dendogram of all samples (leaves and roots at 30, 60, 120 minutes). We see that there may be two main clusters, with the cluster on the right possibly consisting of one ortwo sub-clusters.}
+\label{dendALL}
+\end{figure}
+
+\subsection*{Appendix: Cluster Analysis of All Samples: Two Clusters}
+
+Based on Figure \ref{dendALL}, we can perform two cluster analysis on all samples. We begin by inspecting the parallel coordinate plot in Figure \ref{2PCPALL}:
+
+<<echo=FALSE>>=
+set.seed(1)
+colList = scales::hue_pal()(3)
+data=ALLq1s
+nC = 2
+k = kmeans(data,nC)
+plot_i = vector("list", length=nC+1)
+###
+x = as.data.frame(data[which(k$cluster==1),])
+colnames(x)=c("[1]30R-","[2]30R-","[3]30R-","[1]30R+","[2]30R+","[3]30R+","[1]60R-","[2]60R-","[3]60R-","[1]60R+","[2]60R+","[3]60R+","[1]120R-","[2]120R-","[1]120R+","[2]120R+","[1]30L-","[2]30L-","[1]30L+","[2]30L+","[3]30L+","[1]60L-","[2]60L-","[2]60L+","[3]60L+","[1]120L-","[2]120L-","[1]120L+","[2]120L+")
+c1N = nrow(x)
+x$cluster = "color"
+x$cluster2 = factor(x$cluster)
+plot_i[[1]] = ggparcoord(x, columns=1:29, groupColumn=31, scale="globalminmax", alphaLines = 0.01) + scale_colour_manual(values = c("color" = colList[1])) + xlab(paste("Cluster 1 (n=", c1N,")")) + ylab("Count")+ ylim(c(-4.85,3)) +theme(legend.position = "none", axis.title=element_text(size=12), axis.text=element_text(size=12), axis.text.x = element_text(angle = 90))
+
+###
+x = as.data.frame(data[which(k$cluster==2),])
+colnames(x)=c("[1]30R-","[2]30R-","[3]30R-","[1]30R+","[2]30R+","[3]30R+","[1]60R-","[2]60R-","[3]60R-","[1]60R+","[2]60R+","[3]60R+","[1]120R-","[2]120R-","[1]120R+","[2]120R+","[1]30L-","[2]30L-","[1]30L+","[2]30L+","[3]30L+","[1]60L-","[2]60L-","[2]60L+","[3]60L+","[1]120L-","[2]120L-","[1]120L+","[2]120L+")
+c2N = nrow(x)
+x$cluster = "color"
+x$cluster2 = factor(x$cluster)
+plot_i[[2]] = ggparcoord(x, columns=1:29, groupColumn=31, scale="globalminmax", alphaLines = 0.01) + scale_colour_manual(values = c("color" = colList[2])) + xlab(paste("Cluster 2 (n=", c2N,")")) + ylab("Count")+ ylim(c(-4.85,3)) + theme(legend.position = "none", axis.title=element_text(size=12), axis.text=element_text(size=12), axis.text.x = element_text(angle = 90))
+###
+filts = as.data.frame(filts)
+filts$cluster = "color"
+filts$cluster2 = factor(filts$cluster)
+fN = nrow(filts)
+plot_i[[3]] = ggparcoord(filts, columns=1:29, groupColumn=31, scale="globalminmax", alphaLines = 0.01) + scale_colour_manual(values = c("color" = colList[3])) + xlab(paste("Filtered (n=", fN,")")) + ylab("Count")+ ylim(c(-4.85,3)) + theme(legend.position = "none", axis.title=element_text(size=12), axis.text=element_text(size=12), axis.text.x = element_text(angle = 90))
+@
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+p = do.call("grid.arrange", c(plot_i, ncol=1, main="All Leaves and Roots: 2 Clusters"))
+@
+\caption{Parallel coordinate plot of the two clusters and filtered data, where each line represents the standardized read count for a given gene across all root and leaf samples from 30, 60, and 120 minutes. As the dendogram in Figure \ref{dendALL} suggested 2 clusters for the samples, we applied a k-means clustering algorithm with a cluster size of 2, resulting in the pink cluster and green cluster above. We see that the pink cluster contains genes with higher read counts in the root samples, whereas the green cluster contains genes with higher read counts in the leaf samples. In blue, we see the genes that were filtered, in the process previously described. This is relatively flat across all samples, as we would expect.}
+\label{2PCPALL}
+\end{figure}
+
+Next, we can look at the clusters on a scatterplot between all replicates across iron conditions, see Figure \ref{scatterALL2Fe}.
+
+<<echo=FALSE>>=
+cNum=2
+colList = scales::hue_pal()(3)
+data=ALLq1
+set.seed(1)
+k = kmeans(ALLq1s,cNum)
+data$cluster = k$cluster
+filt$cluster = rep(cNum+1,each=nrow(filt))
+filt$cluster2 = NULL
+data = rbind(filt, data)
+dat = data.frame(x=c(data[,1],data[,2],data[,3],data[,7],data[,8],data[,9],data[,13],data[,14],data[,17],data[,18],data[,22],data[,23],data[,26],data[,27]),y=c(data[,4],data[,5],data[,6],data[,10],data[,11],data[,12],data[,15],data[,16],data[,19],data[,20],data[,24],data[,25],data[,28],data[,29]),cluster=data[,30])
+# Only keep 1/5 data points
+ind = seq(1, nrow(dat), by=10)
+dat=dat[ind, ]
+@
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+ggplot(dat,aes(x,y))+geom_point(aes(colour = factor(cluster), alpha=0.5)) +scale_colour_discrete(labels = c(paste("Cluster 1 (n=", c1N,")"), paste("Cluster 2 (n=", c2N,")"), paste("Filtered (n=", fN,")"))) + xlab("Fe- Read Count")+ylab("Fe+ Read Count")+theme(legend.position=c("bottom"), legend.text=element_text(size=12)) + ggtitle("All Replicates Fe+/-") + labs(colour = "") + guides(alpha = FALSE)+theme(legend.title=element_blank()) + geom_abline(slope=1, intercept=0)
+@
+\caption{Scatterplot of the replicates from the two clusters and filtered data of the entire sample set. Here, a replicate was considered to have all things equivalent (time points and leaf/root) except for iron conditions. We see that the pink and green clusters contain genes with rather large read counts, with the green cluster containing the most read counts. In contrast, the blue cluster is the filtered data that tends to have low read counts.)}
+\label{scatterALL2Fe}
+\end{figure}
+
+We can likewise view the clusters as replicates of leaves versus roots, see Figure \ref{scatterALL2LR}.
+
+<<echo=FALSE>>=
+dat = data.frame(x=c(data[,1],data[,2],data[,4],data[,5],data[,6],data[,7],data[,8],data[,10],data[,11],data[,13],data[,14],data[,15],data[,16]),y=c(data[,17],data[,18],data[,19],data[,20],data[,21],data[,22],data[,23],data[,24],data[,25],data[,26],data[,27],data[,28],data[,29]),cluster=data[,30])
+# Only keep 1/5 data points
+ind = seq(1, nrow(dat), by=10)
+dat=dat[ind, ]
+@
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+ggplot(dat,aes(x,y))+geom_point(aes(colour = factor(cluster), alpha=0.5)) +scale_colour_discrete(labels = c(paste("Cluster 1 (n=", c1N,")"), paste("Cluster 2 (n=", c2N,")"), paste("Filtered (n=", fN,")"))) + xlab("Root Read Count")+ylab("Leaf Read Count")+theme(legend.position=c("bottom"), legend.text=element_text(size=12)) + ggtitle("All Replicates Leaf/Root") + labs(colour = "") + guides(alpha = FALSE)+theme(legend.title=element_blank()) + geom_abline(slope=1, intercept=0)
+@
+\caption{Scatterplot of the replicates from the two clusters and filtered data of the entire sample set. Here, a replicate was considered to have all things equivalent (time points and iron condition) except for leaf versus root. We see that the pink and green clusters contain genes with rather large read counts. In contrast, the blue cluster is the filtered data that tends to have low read counts. Moreover, the pink cluster has more root read count, while the green cluster has more leaf read counts. This is consistent with what we saw in the parallel coordinate plot, in Figure \ref{2PCPALL}.This suggests that the dendogram for all samples split the data into two clusters consisting mostly of genes with larger read counts in roots (pink) and genes with larger read counts in leaves (green).}
+\label{scatterALL2LR}
+\end{figure}
+
+\subsection*{Cluster Analysis of All Samples: Three Clusters}
+
+Now that we have examined the two-cluster analysis results for all samples, we will also look at the three-cluster analysis results, as this was also indicated as a possibility in Figure \ref{dendALL}. We start by looking at the parallel coordinate plot, in Figure \ref{3PCPALL}.
+
+<<echo=FALSE>>=
+set.seed(1)
+colList = c(scales::hue_pal()(3),"#520090")
+data=ALLq1s
+nC = 3
+k = kmeans(data,nC)
+plot_i = vector("list", length=nC+1)
+###
+x = as.data.frame(data[which(k$cluster==1),])
+colnames(x)=c("[1]30R-","[2]30R-","[3]30R-","[1]30R+","[2]30R+","[3]30R+","[1]60R-","[2]60R-","[3]60R-","[1]60R+","[2]60R+","[3]60R+","[1]120R-","[2]120R-","[1]120R+","[2]120R+","[1]30L-","[2]30L-","[1]30L+","[2]30L+","[3]30L+","[1]60L-","[2]60L-","[2]60L+","[3]60L+","[1]120L-","[2]120L-","[1]120L+","[2]120L+")
+c1N = nrow(x)
+x$cluster = "color"
+x$cluster2 = factor(x$cluster)
+plot_i[[1]] = ggparcoord(x, columns=1:29, groupColumn=31, scale="globalminmax", alphaLines = 0.01) + scale_colour_manual(values = c("color" = colList[1])) + xlab(paste("Cluster 1 (n=", c1N,")")) + ylab("Count")+ ylim(c(-4.85,3)) +theme(legend.position = "none", axis.title=element_text(size=12), axis.text=element_text(size=8), axis.text.x = element_text(angle = 90))
+
+###
+x = as.data.frame(data[which(k$cluster==2),])
+colnames(x)=c("[1]30R-","[2]30R-","[3]30R-","[1]30R+","[2]30R+","[3]30R+","[1]60R-","[2]60R-","[3]60R-","[1]60R+","[2]60R+","[3]60R+","[1]120R-","[2]120R-","[1]120R+","[2]120R+","[1]30L-","[2]30L-","[1]30L+","[2]30L+","[3]30L+","[1]60L-","[2]60L-","[2]60L+","[3]60L+","[1]120L-","[2]120L-","[1]120L+","[2]120L+")
+c2N = nrow(x)
+x$cluster = "color"
+x$cluster2 = factor(x$cluster)
+plot_i[[2]] = ggparcoord(x, columns=1:29, groupColumn=31, scale="globalminmax", alphaLines = 0.01) + scale_colour_manual(values = c("color" = colList[2])) + xlab(paste("Cluster 2 (n=", c2N,")")) + ylab("Count")+ ylim(c(-4.85,3)) + theme(legend.position = "none", axis.title=element_text(size=12), axis.text=element_text(size=8), axis.text.x = element_text(angle = 90))
+###
+x = as.data.frame(data[which(k$cluster==3),])
+colnames(x)=c("[1]30R-","[2]30R-","[3]30R-","[1]30R+","[2]30R+","[3]30R+","[1]60R-","[2]60R-","[3]60R-","[1]60R+","[2]60R+","[3]60R+","[1]120R-","[2]120R-","[1]120R+","[2]120R+","[1]30L-","[2]30L-","[1]30L+","[2]30L+","[3]30L+","[1]60L-","[2]60L-","[2]60L+","[3]60L+","[1]120L-","[2]120L-","[1]120L+","[2]120L+")
+c3N = nrow(x)
+x$cluster = "color"
+x$cluster2 = factor(x$cluster)
+plot_i[[3]] = ggparcoord(x, columns=1:29, groupColumn=31, scale="globalminmax", alphaLines = 0.01) + scale_colour_manual(values = c("color" = colList[4])) + xlab(paste("Cluster 3 (n=", c3N,")")) + ylab("Count")+ ylim(c(-4.85,3)) + theme(legend.position = "none", axis.title=element_text(size=12), axis.text=element_text(size=8), axis.text.x = element_text(angle = 90))
+###
+filts = as.data.frame(filts)
+filts$cluster = "color"
+filts$cluster2 = factor(filts$cluster)
+fN = nrow(filts)
+plot_i[[4]] = ggparcoord(filts, columns=1:29, groupColumn=31, scale="globalminmax", alphaLines = 0.01) + scale_colour_manual(values = c("color" = colList[3])) + xlab(paste("Filtered (n=", fN,")")) + ylab("Count")+ ylim(c(-4.85,3)) + theme(legend.position = "none", axis.title=element_text(size=12), axis.text=element_text(size=8), axis.text.x = element_text(angle = 90))
+@
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+p = do.call("grid.arrange", c(plot_i, ncol=1, main="All Leaves and Roots: 3 Clusters"))
+@
+\caption{Parallel coordinate plot of the three clusters and filtered data, where each line represents the standardized read count for a given gene across all root and leaf samples from 30, 60, and 120 minutes. As the dendogram in Figure \ref{dendALL} suggested 3 clusters for the samples, we applied a k-means clustering algorithm with a cluster size of 3, resulting in the pink cluster, green, and purple clusters above. We see that the pink cluster contains genes with higher read counts in the root samples, whereas the green cluster contains genes with higher read counts in the leaf samples. The purple cluster, however, does not seem to differentiate the leaf and root read counts, and seems of lower quality as it is inconsistent across replicates. In blue, we see the genes that were filtered, in the process previously described. This is relatively flat across all samples, as we would expect.}
+\label{3PCPALL}
+\end{figure}
+
+We can examine this purple cluster a bit more closely, in Figure \ref{purple}.
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+ggparcoord(x, columns=1:29, groupColumn=31, scale="globalminmax", alphaLines = 0.01) + scale_colour_manual(values = c("color" = colList[4])) + xlab(paste("Cluster 3 (n=", c3N,")")) + ylab("Count")+ ylim(c(-4.85,3)) + ggtitle("All: Suspicious Cluster from 3 Clusters") + theme(legend.position = "none", axis.title=element_text(size=12), axis.text=element_text(size=12), axis.text.x = element_text(angle = 90))
+@
+\caption{The purple cluster suspected of poor-quality, as was shown in the parallel coordinate plots of the three clusters produced across all samples in Figure \ref{3PCPALL}. We see that, indeed, the read count appears flat across roots versus leaves, and appears to be inconsistent between replicates.}
+\label{purple}
+\end{figure}
+
+
+\section*{Appendix: Normalization, Data Cleaning, and Pre-processing}
+
+I first load the necessary libraries.
+
+<<>>=
+library(rtracklayer)
+library(Rsamtools)
+library(grid)
+library(GenomicAlignments)
+library(ggplot2)
+library(GGally)
+library(edgeR)
+library(stringr)
+library(EDASeq)
+library(dplyr)
+library(matrixStats)
+library(gridExtra)
+@
+
+Next, I load in the count table of the leaf samples. I remove the junk text in the dataset with the strsplit() function. I also set the row names to be those of the Glyma IDs.
+
+<<>>=
+load("All_leaves040615.rda")
+ct <- countTable
+ct2 <- assays(ct)[[1]]
+rownames(ct2) <- ct@rowData@elementMetadata@listData$ID
+colnames(ct2) <- unlist(strsplit(colnames(ct2), "\\."))[seq(1, 17*3, 3)]
+# This variable is stored to be used later
+leaves.all <- ct2
+@
+
+I can check the normalization with the function:
+
+<<>>=
+libSizes <- as.vector(colSums(ct2))
+libSizes
+@
+
+The DGEList() function adds the number of reads in each sample. The cpm() function converts the counts to counts per million, and the two boolean values of TRUE put the data on a log-scale and uses the default normalization library.
+
+<<>>=
+y <- DGEList(counts=ct2)
+#y <- calcNormFactors(y, method="none") #This doesn't actually do anything
+cpm.y.new <- cpm(y, TRUE, TRUE) # How is this working?
+# CPM values are useful descriptive measures for the expression level of a gene or transcript. By default, the normalized library sizes are used in the computation for DGEList objects but simple column sums for matrices.
+@
+
+I then retain the genes that have a cpm count of greater than one in at least two samples. This reduces the gene size to 32,554. I then renormalize, and ensure that I have the leaves labeled correctly.
+
+<<>>=
+# This is cutting off a value of 1 for the normalized (neg and pos) cpm counts for genes
+y <- y[rowSums(cpm.y.new>1)>=2,]
+# Unlike before, almost all cpm.y.new values are positive
+cpm.y.new <- cpm(y, TRUE, TRUE) #How is this actually working?
+@
+
+I try three possible normalization options in the calcNormFactors() function. The first is the RLE scaling factor method:
+
+<<>>=
+yR <- calcNormFactors(y, method="RLE")
+y$samples$norm.factors
+cpm.y.new <- cpm(y, TRUE, TRUE)
+@
+
+We check the quality of the leaves data using multi-dimensional scaling (MDS). We see from the MDS plot shown in Figure \ref{mdsL20} that the 120-minute leaves in iron-deficient conditions (8, 14, and 22) and iron-sufficient conditions (11, 27, and 33) may possibly be the only high-quality data from the leaves.
+
+\begin{figure}[H]
+ \centering
+<<fig=TRUE, echo=TRUE>>=
+par(pty="s")
+mds <- plotMDS(cpm.y.new)
+@
+ \caption{MDS plot of the six samples of leaves from 120 minutes. If the data is high-quality, then each of the three replicates should be separated very only a little distance, and inter-replicates should be separated by a further distance. We see that the 120-minute leaves in iron-deficient conditions (8, 14, and 22) and iron-sufficient conditions (11, 27, and 33) are possibly high-quality data. However, most of the rest of the MDS plot is messy, indicating that the rest of the leaves data is probably of poor-quality.}
+ \label{mdsL20}
+\end{figure}
+
+To further investigate the quality, I can also view these six datasets (120-minute leaves) in a pairwise scatterplot matrix, see Figure \ref{scatMatL20}
+
+\begin{figure}[H]
+ \centering
+<<fig=TRUE, echo=TRUE>>=
+scatmat(data.frame(cpm.y.new)[,c(9,13,14,12,16,17)])
+@
+ \caption{Scatterplot matrix of the six samples of leaves from 120 minutes, where each of scatterplot matrix compares two of the three replicates. If the 120-minute leaves samples are high quality, then we would expect replicates to have read counts centered on the diagonal x=y line, and non-relicates to deviate somewhat from the diagonal x=y line. Indeed, this is what we see, as the bottom-left nine plots (non-replicates) appear much thicker around the x=y line than the other plots (replicates).}
+ \label{scatMatL20}
+\end{figure}
+
+I can test the sufficiency of the normalization process applied by producing side-by-side boxplots, as shown in Figure \ref{boxplotL20n1}.
+
+\begin{figure}[H]
+ \centering
+<<fig=TRUE, echo=TRUE>>=
+ggparcoord(data.frame(cpm.y.new), columns=1:17, alphaLines=0, boxplot=TRUE, scale="globalminmax") + coord_flip()
+@
+ \caption{Boxplot of the 17 leaves samples, after using RLE scaling factor method for normalization. Since we only expect a handful of genes to show differential expression, we expect the samples to be mostly similar, and we do here, as the median values and IQR ranges are comparable across the samples.}
+ \label{boxplotL20n1}
+\end{figure}
+
+I then look at the two other normalization methods. First, I inspect the upper quartile normalization method by viewing the resulting boxplot, in Figure \ref{boxplotL20n2}.
+
+\begin{figure}[H]
+ \centering
+<<fig=TRUE, echo=TRUE>>=
+y <- calcNormFactors(y, method="upperquartile")
+y$samples$norm.factors
+cpm.y.new <- cpm(y, TRUE, TRUE)
+ggparcoord(data.frame(cpm.y.new), columns=1:17, alphaLines=0, boxplot=TRUE, scale="globalminmax") + coord_flip()
+@
+ \caption{Boxplot of the 17 leaves samples, after using the upperquartile normalization method. Since we only expect a handful of genes to show differential expression, we expect the samples to be mostly similar, and we do here, as the median values and IQR ranges are comparable across the samples.}
+ \label{boxplotL20n2}
+\end{figure}
+
+Second, I use the default normalization option of calcNormFactors(), which is TMM, a weighted trimmed mean of M-values, and view its resulting boxplot in Figure \ref{boxplotL20n3}:
+
+\begin{figure}[H]
+ \centering
+<<fig=TRUE, echo=TRUE>>=
+y <- calcNormFactors(y)
+cpm.y.new <- cpm(y, TRUE, TRUE)
+ggparcoord(data.frame(cpm.y.new), columns=1:17, alphaLines=0, boxplot=TRUE, scale="globalminmax") + coord_flip()
+@
+ \caption{Boxplot of the 17 leaves samples, after using the TMM (weighted trimmed mean of M-values) normalization method. Since we only expect a handful of genes to show differential expression, we expect the samples to be mostly similar, and we do here, as the median values and IQR ranges are comparable across the samples.}
+ \label{boxplotL20n3}
+\end{figure}
+
+I believe the TMM method did the best job normalizing the data, because the quartiles (and in particular the median values of counts) look the most similar across the 17 samples. Finally, I relabel the leaves.
+
+<<>>=
+leaves <- cpm.y.new[,c(1,2,3,4,5,6,8,15,10,11,7,9,13,14,12,16,17)]
+@
+
+Next, I do a similar process for the root samples:
+
+<<>>=
+load("All_roots.rda")
+ct.roots <- countTable
+ct2 <- assays(ct.roots)[[1]]
+rownames(ct2) <- ct@rowData@elementMetadata@listData$ID
+colnames(ct2) <- unlist(strsplit(colnames(ct2), "\\."))[seq(1, 18*3, 3)]
+roots.all <- ct2
+
+y <- DGEList(counts=ct2)
+y <- calcNormFactors(y, method="none")
+cpm.y.new <- cpm(y, TRUE, TRUE)
+y <- y[rowSums(cpm.y.new>1)>=2,]
+cpm.y.new <- cpm(y, TRUE, TRUE)
+@
+
+At this point, I want to concatenate the root and leaf samples. I remove one root (16) because its data was suspicious. I look to see what the full dataset looks like (before it has been normalized) in a boxplot shown in Figure \ref{boxplotAll}:
+
+\begin{figure}[H]
+ \centering
+<<fig=TRUE, echo=TRUE>>=
+all <- cbind(leaves.all, roots.all[,c(1:15,17:18)])
+y <- DGEList(counts=all)
+y <- y[rowSums(y$counts>1)>=15,]
+cpm.y.new <- cpm(y, TRUE, TRUE)
+ggparcoord(data.frame(cpm.y.new), columns=1:34, alphaLines=0, boxplot=TRUE, scale="globalminmax") + coord_flip()
+@
+ \caption{Boxplot of the all leaves and roots samples before any normalization method. Since we only expect a handful of genes to show differential expression, we expect the samples to be mostly similar. However, we see here that there is a systematic error between the leaves and roots. Namely, the roots have a larger median number of counts, and also tend to have more low-valued outliers. There is even variation within roots and leaves (although to a much less extent than between the two groups). This all means that we need to normalize this data.}
+ \label{boxplotAll}
+\end{figure}
+
+Of the available normalization methods, the upper quartile option provided the best means to normalize across concatenated datasets simultaneously.
+
+<<>>=
+y <- calcNormFactors(y, method="upperquartile")
+cpm.y.new <- cpm(y, TRUE, TRUE)
+y$samples$norm.factors
+cpm.y.new <- cpm(y, TRUE, TRUE)
+x <- cpm.y.new[cpm.y.new[,1]>14,]
+y <- calcNormFactors(y, method="none")
+cpm.y.new <- cpm(y, TRUE, TRUE)
+cpm.y.norm <- betweenLaneNormalization(cpm.y.new, which="full", round=FALSE)
+data = cpm.y.norm
+ggparcoord(data.frame(data), columns=1:34, alphaLines=0, boxplot=TRUE, scale="globalminmax") + coord_flip()
+@
+
+\end{document}

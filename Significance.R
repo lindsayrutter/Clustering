@@ -1,3 +1,25 @@
+\documentclass{article}
+\usepackage{float, hyperref}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{caption}
+
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+
+\author{Lindsay Rutter}
+\title{Cluster Analysis of Wasps}
+
+\maketitle
+
+<<options, echo=FALSE>>=
+  library(knitr)
+opts_chunk$set(cache=TRUE)
+@
+  
+  \section*{Introduction}
+
 library(knitr)
 library(rtracklayer)
 library(Rsamtools)
@@ -32,7 +54,7 @@ d = DGEList(counts=countTable, group=listcond)
 d = calcNormFactors(d)
 
 # MDSplot-Orig.png
-plotMDS(d, labels=colnames(countTable), col = c("darkgreen","blue")[factor(listcond)])
+plotMDS(d, labels=colnames(countTable), col = c("red","orange","green","blue","purple")[factor(listcond)])
 
 # estimate tagwise dispersion
 d = estimateCommonDisp(d)
@@ -161,6 +183,7 @@ RowSD = function(x) {
 }
 
 d2t = d2
+d2 = as.data.frame(d2)
 d2 = mutate(d2, mean = (DR.1+DR.2+DR.3+DR.4+DR.5+DR.6+DU.1+DU.2+DU.3+DU.4+DU.5+DU.6+F.1+F.2+F.3+F.4+F.5+F.6+NR.1+NR.2+NR.3+NR.4+NR.5+NR.6+NU.1+NU.2+NU.4+NU.5+NU.6)/ncol(d2), stdev = RowSD(cbind(DR.1,DR.2,DR.3,DR.4,DR.5,DR.6,DU.1,DU.2,DU.3,DU.4,DU.5,DU.6,F.1,F.2,F.3,F.4,F.5,F.6,NR.1,NR.2,NR.3,NR.4,NR.5,NR.6,NU.1,NU.2,NU.4,NU.5,NU.6)))
 rownames(d2)=rownames(d2t)
 
@@ -201,6 +224,7 @@ ggparcoord(d2q1, columns=1:ncol(d2q1), alphaLines=0, boxplot=TRUE, scale="global
 d2q1s_Plot = as.data.frame(d2q1s)
 ggparcoord(d2q1s_Plot, columns=1:ncol(d2q1s_Plot), alphaLines=0, boxplot=TRUE, scale="globalminmax") + scale_y_log10() + coord_flip()
 
+dev.off()
 myVec = c("DR", "DU", "F", "NR", "NU")
 for (i in 1:(length(myVec)-1)){
   for (j in (i+1):length(myVec)){
@@ -208,18 +232,70 @@ for (i in 1:(length(myVec)-1)){
     type2 = myVec[j]
     myCol = c(grep(type1, colnames(d2q1)), grep(type2, colnames(d2q1)))
     jpeg(file = paste(getwd(), "/", type1, "_", type2, "_ALPHA10.jpg", sep=""), height = 700, width = 700)
-    p = scatmat(d2q1, columns=myCol, alpha = 0.01)
+    print(scatmat(d2q1, columns=myCol, alpha = 0.01))
     dev.off()
     jpeg(file = paste(getwd(), "/", type1, "_", type2, "_ALPHA7.jpg", sep=""), height = 700, width = 700)
-    p = scatmat(d2q1, columns=myCol, alpha = 0.007)
+    print(scatmat(d2q1, columns=myCol, alpha = 0.007))
     dev.off()
     jpeg(file = paste(getwd(), "/", type1, "_", type2, "_ALPHA3.jpg", sep=""), height = 700, width = 700)
-    p = scatmat(d2q1, columns=myCol, alpha = 0.003)
+    print(scatmat(d2q1, columns=myCol, alpha = 0.003))
     dev.off()
     jpeg(file = paste(getwd(), "/", type1, "_", type2, "_ALPHA1.jpg", sep=""), height = 700, width = 700)
-    p = scatmat(d2q1, columns=myCol, alpha = 0.001)
+    print(scatmat(d2q1, columns=myCol, alpha = 0.001))
     dev.off()    
-  }
+    }
 }
 
+############ Significance testing for normalized no NU.3 ###########
 
+listcond = c(rep(c("DR","DU","F","NR"),each=6), rep(c("NU"),each=5))
+# create DGEList object
+d = DGEList(counts=countTable, group=listcond)
+# estimate normalization factors
+d = calcNormFactors(d)
+
+# MDSplot-NONU3.png
+plotMDS(d, labels=colnames(countTable), col = c("red","orange","green","blue","purple")[factor(listcond)])
+
+# Estimate tagwise dispersion
+# Now, str(d) has raw read counts, norm factors, lib.size, and more
+d = estimateCommonDisp(d)
+d = estimateTagwiseDisp(d)
+
+#MeanVarplot-NONU3.png
+# This function is useful for exploring the mean-variance relationship in the data. Raw variances are, for each gene, the pooled variance of the counts from each sample, divided by a scaling factor (by default the effective library size). The function will plot the average raw variance for genes split into nbins bins by overall expression level. The averages are taken on the square-root scale as for count data the arithmetic mean is upwardly biased. A line showing the Poisson mean-variance relationship (mean equals variance) is always shown.
+plotMeanVar(d, show.tagwise.vars=TRUE, NBline=TRUE)
+
+#MeanVarplot-NONU3.png
+# Plots the tagwise biological coefficient of variation (square root of dispersions) against log2-CPM.
+plotBCV(d)
+
+######### Create pairwise significance tests #########
+
+for (i in 1:(length(myVec)-1)){
+  for (j in (i+1):length(myVec)){
+
+  # Test for differential expression
+  de = exactTest(d, pair=c(myVec[i],myVec[j]))
+
+  #This automatically sorts by ascending p-value, and creates an FDR column (by dividing p-value by the number of genes)
+  tt = topTags(de, n=nrow(d))
+  head(tt$table)
+
+  # Inspect the depth-adjusted reads per million for some of the top differentially expressed genes (just dividing each read count by 1/millionth lib.size)
+  nc = cpm(d, normalized.lib.sizes=TRUE)
+  rn = rownames(tt$table)
+  # Sorted in order of lowest FDR from DE comparison
+  head(nc[rn,order(listcond)],5)
+
+  # Create a graphical summary, such as an M (log-fold change) versus A (log-average expression) plot, here showing the genes selected as differentially expressed with a 5% false discovery rate.
+  deg = rn[tt$table$FDR < .05]
+  dev.off()
+  jpeg(file = paste(getwd(), "/", myVec[i], "_", myVec[j], "_PlotSmear.jpg", sep=""), height = 700, width = 700)
+  print(plotSmear(d, de.tags=deg))
+  dev.off()
+
+  # Would save file
+  write.csv(tt$table, file=paste(getwd(), "/", "TopTags_", myVec[i], "_", myVec[j], ".csv", sep=""))
+  }
+}
