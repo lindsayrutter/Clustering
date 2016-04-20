@@ -109,7 +109,7 @@ plotBCV(d)
 \label{plotBCV}
 \end{figure}
 
-<<>>=
+<<eval=FALSE>>=
 # Test for differential expression
 # Compute genewise exact tests for differences in the means between two groups of negative-binomially distributed counts. The functions accept two groups of count libraries, and a test is performed for each row of data. For each row, the test is conditional on the sum of counts for that row. No genes passed FDR correction
 de = exactTest(d, pair=c("NU","DR"))
@@ -149,11 +149,6 @@ d2 <- DGEList(counts=countTable)
 # 52,564 genes (from 157,691). In edgeR, it is recommended to remove features without at least 1 read per million in n of the samples, where n is the size of the smallest group of replicates. Also, should filter on CPM!
 d2 <- d2[rowSums(d2$counts>1)>=6,]
 
-# Took too long as well
-#d2plot = as.data.frame(d2[[1]])
-#d2plot = gather(d2plot)
-#ggplot(d2plot, aes(factor(value), key)) + geom_boxplot()
-
 # Now positive and negative
 cpm.d2.new <- cpm(d2, TRUE, TRUE)
 cpm.d2.norm <- betweenLaneNormalization(cpm.d2.new, which="full", round=FALSE)
@@ -192,7 +187,7 @@ colnames(filt)=colnames(d2q1)
 # filt (40709, 32)
 filt = rbind(filt,d2q1[which(sign(model$residuals) == -1),])
 # filt (40709, 32)
-filts = t(apply(as.matrix(filt), 1, scale))
+#filts = t(apply(as.matrix(filt), 1, scale))
 colnames(filts)=colnames(d2q1)
 colnames(filt)=colnames(d2q1)
 @

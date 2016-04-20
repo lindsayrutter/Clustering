@@ -1,0 +1,487 @@
+\documentclass{article}
+\usepackage{float, hyperref}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{caption}
+
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+
+\author{Lindsay Rutter}
+\title{Cluster Analysis of Wasps}
+
+\maketitle
+
+<<options, echo=FALSE>>=
+  library(knitr)
+opts_chunk$set(cache=TRUE)
+@
+  
+\section*{Introduction}
+
+<<echo=FALSE,eval=TRUE>>=
+library(knitr)
+library(rtracklayer)
+library(Rsamtools)
+library(grid)
+library(GenomicAlignments)
+library(ggplot2)
+library(GGally)
+library(edgeR)
+library(stringr)
+library(EDASeq)
+library(dplyr)
+library(matrixStats)
+library(gridExtra)
+library(reshape2)
+library(scales)
+library(tidyr)
+@
+
+<<echo=TRUE>>=
+rm(list=ls())
+load("All_wasp.rda")
+listcond = rep(c("DR","DU"),each= 6)
+# create DGEList object
+d = DGEList(counts=countTable[,c(1:12)], group=listcond)
+@
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+ggparcoord(data.frame(d[[1]]), columns=1:12, alphaLines=0, boxplot=TRUE, scale="globalminmax") + coord_flip()
+@
+\caption{Boxplot of 12 DR and DU samples.}
+\label{BoxAll}
+\end{figure}
+
+<<echo=TRUE>>=
+myVec = c("DR", "DU")
+myCol = c(which(colnames(countTable) == grep('DR', colnames(countTable), value=TRUE)), which(colnames(countTable) == grep('DU', colnames(countTable), value=TRUE)))
+@
+
+%\begin{figure}[H]
+%\centering
+%<<fig=TRUE, echo=TRUE>>=
+%scatmat(countTable, columns=myCol, alpha = 0.01)
+%@
+%\caption{Scatterplot matrix of DU and DR.}
+%\label{BoxAll}
+%\end{figure}
+
+<<echo=TRUE>>=
+# estimate normalization factors
+d = calcNormFactors(d)
+@
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+plotMDS(d, labels=colnames(countTable[,c(1:12)]), col = c("red","blue")[factor(listcond)])
+@
+\caption{MDS of the 12 DU and DR samples.}
+\label{plotMDS}
+\end{figure}
+
+<<echo=TRUE>>=
+# estimate tagwise dispersion
+d = estimateCommonDisp(d)
+d = estimateTagwiseDisp(d)
+# Now, str(d) has raw read counts, norm factors, lib.size, and more
+@
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+plotMeanVar(d, show.tagwise.vars=TRUE, NBline=TRUE)
+@
+\caption{This function is useful for exploring the mean-variance relationship in the data. Raw variances are, for each gene, the pooled variance of the counts from each sample, divided by a scaling factor (by default the effective library size). The function will plot the average raw variance for genes split into nbins bins by overall expression level. The averages are taken on the square-root scale as for count data the arithmetic mean is upwardly biased. A line showing the Poisson mean-variance relationship (mean equals variance) is always shown.}
+\label{plotMeanVar}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+plotBCV(d)
+@
+\caption{Plots the tagwise biological coefficient of variation (square root of dispersions) against log2-CPM.}
+\label{plotBCV}
+\end{figure}
+
+<<echo=TRUE>>=
+# Test for differential expression
+# Compute genewise exact tests for differences in the means between two groups of negative-binomially distributed counts. The functions accept two groups of count libraries, and a test is performed for each row of data. For each row, the test is conditional on the sum of counts for that row. No genes passed FDR correction
+de = exactTest(d, pair=c("DU","DR"))
+
+#Use the topTags function to present a tabular summary of the differential expression statistics (note that topTags operates on the output of exactTest. This automatically sorts by ascending p-value, and creates an FDR column (by dividing p-value by the number of genes)
+tt = topTags(de, n=nrow(d))
+head(tt$table)
+length(which((tt$table)$FDR < 0.05))
+# There are 34 genes with FDR < 0.05
+
+# Inspect the depth-adjusted reads per million for some of the top differentially expressed genes (just dividing each read count by 1/millionth lib.size)
+nc = cpm(d, normalized.lib.sizes=TRUE)
+rn = rownames(tt$table)
+# Sorted in order of lowest FDR from DE comparison
+head(nc[rn,order(listcond)],5)
+@
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+deg = rn[tt$table$FDR < .05]
+plotSmear(d, de.tags=deg)
+@
+\caption{Create a graphical summary, such as an M (log-fold change) versus A (log-average expression) plot, here showing the genes selected as differentially expressed with a 5\% false discovery rate. There were 34 in this dataset!}
+\label{plotSmear}
+\end{figure}
+
+<<echo=TRUE>>=
+# Would save file
+write.csv(tt$table, file="topDEG_DU_DR_noNorm.csv")
+@
+
+%%%%%%%%%%%%%%%%%%%%% START OVER WITH FILTERING NOW %%%%%%%%%%%%%%%%%%%%%%% 
+% We are filtering on cpm values this time (as recommended by EdgeR)
+
+<<echo=TRUE>>=
+#%%%%%%%%%%%%%%%%%%%%% START OVER WITH FILTERING NOW %%%%%%%%%%%%%%%%%%%%%%% 
+#% We are filtering on cpm values this time (as recommended by EdgeR). But we are not doing Loess filtering just yet.
+
+load("All_wasp.rda")
+listcond = rep(c("DR","DU"),each= 6)
+# 157,691 genes
+y = DGEList(counts=countTable[,c(1:12)], group=listcond)
+
+keep <- rowSums(cpm(y)>1) >= 6
+y <- y[keep, keep.lib.sizes=FALSE] # it seems library sizes are recalculated (y$samples$lib.size = colSums(y$counts))
+
+y <- calcNormFactors(y)
+@
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+plotMDS(y, labels=colnames(countTable[,c(1:12)]), col = c("red","blue")[factor(listcond)])
+@
+\caption{MDS plot 12 DR and DU samples.}
+\label{MDS}
+\end{figure}
+
+<<echo=TRUE>>=
+y = estimateCommonDisp(y)
+y = estimateTagwiseDisp(y)
+@
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+plotMeanVar(y, show.tagwise.vars=TRUE, NBline=TRUE)
+@
+\caption{MeanVar plot of 12 DR and DU samples.}
+\label{MDS}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+plotBCV(y)
+@
+\caption{BCV plot of 12 DR and DU samples.}
+\label{MDS}
+\end{figure}
+
+<<echo=TRUE>>=
+#dim(32813, 3)
+de = exactTest(y, pair=c("DR","DU"))
+tt = topTags(de, n=nrow(y))
+head(tt$table)
+# ONLY 7 
+length(which((tt$table)$FDR < 0.05))
+
+nc = cpm(y, normalized.lib.sizes=TRUE)
+rn = rownames(tt$table)
+# Sorted in order of lowest FDR from DE comparison
+head(nc[rn,order(listcond)],5)
+
+# just for plotting purposes
+deg = rn[tt$table$FDR < .05] # Only 7
+@
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+plotSmear(y, de.tags=deg)
+@
+\caption{Plot smear of 12 DR and DU samples.}
+\label{MDS}
+\end{figure}
+
+<<eval=TRUE>>=
+write.csv(tt$table, file="topDEG_DU_DR_NormFDR.csv")
+@
+
+<<eval=FALSE>>=
+topInfo = cbind(nc[rn,order(listcond)], tt$table)
+
+dev.off()
+for (i in 1:100){
+  gene = topInfo[i,1:12]
+  rep = 6
+  fact = 2
+  dat = data.frame(x=rep(1:fact, each=rep),y=t(gene),z=rep(1:rep, times = fact))
+  colnames(dat)=c("x","y","rep")
+  dat$x=as.factor(dat$x)
+  levels(dat$x)=c("DR","DU")
+  genePlot = ggplot(dat, aes(x, y)) + geom_point(aes(colour = factor(x)), shape = 20, size=5) + scale_shape(solid = FALSE) + ylab("Read Count") + ggtitle(paste("Transcript:", rownames(gene), " FDR: ", topInfo[i,]$FDR)) + scale_y_continuous(limits=c(0, max(dat$y))) + theme(axis.title.x = element_blank(), legend.position="bottom", axis.text=element_text(size=12), axis.title=element_text(size=12), legend.title=element_text(size=12), legend.text=element_text(size=12)) + labs(colour = "Group", size=12) + geom_segment(aes(x = 1, y = mean(dat$y[1:6]), xend = 2, yend = mean(dat$y[7:12])))
+
+  jpeg(file = paste(getwd(), "/DU_DR_Genes_FDR/", "Gene_", i, ".jpg", sep=""), height = 700, width = 700)
+  print(genePlot)
+  dev.off()
+}
+@
+
+
+%%%%%%%%%%%%%%%%%%%%% START OVER WITH FILTERING NOW %%%%%%%%%%%%%%%%%%%%%%% 
+% We are filtering on cpm values this time (as recommended by EdgeR)
+
+<<echo=TRUE>>=
+#%%%%%%%%%%%%%%%%%%%%% START OVER WITH FILTERING NOW %%%%%%%%%%%%%%%%%%%%%%% 
+#% We are filtering on cpm values this time (as recommended by EdgeR). And also now doing Loess filtering.
+rm(list=ls())
+load("All_wasp.rda")
+listcond = rep(c("DR","DU"),each= 6)
+# 157,691 genes
+y = DGEList(counts=countTable[,c(1:12)], group=listcond)
+
+keep <- rowSums(cpm(y)>1) >= 6
+y <- y[keep, keep.lib.sizes=FALSE] # it seems library sizes are recalculated (y$samples$lib.size = colSums(y$counts))
+
+######################### EXTRA FILTERING AT THIS STEP ########################
+
+RowSD = function(x) {
+  sqrt(rowSums((x - rowMeans(x))^2)/(dim(x)[2] - 1))
+}
+
+yt = y
+yt2 = as.data.frame(yt[[1]])
+y = mutate(yt2, mean = (DR.1+DR.2+DR.3+DR.4+DR.5+DR.6+DU.1+DU.2+DU.3+DU.4+DU.5+DU.6)/ncol(yt2), stdev = RowSD(cbind(DR.1,DR.2,DR.3,DR.4,DR.5,DR.6,DU.1,DU.2,DU.3,DU.4,DU.5,DU.6)))
+rownames(y)=rownames(yt)
+
+# The first quartile threshold of mean counts across the 12 samples
+q1T = as.numeric(summary(y$mean)["1st Qu."])
+# 24,610 genes
+d2q1 = subset(y,mean>q1T)
+# The first quartile threshold of standard deviation across the 12 samples
+q1Ts = as.numeric(summary(d2q1$stdev)["1st Qu."])
+# 18,458 genes
+d2q1 = subset(d2q1,stdev>q1Ts)
+# 14,355
+filt = subset(y,mean<=q1T|stdev<=q1Ts)
+
+model = loess(mean ~ stdev, data=d2q1)
+# 8,058 genes
+d2q1 = d2q1[which(sign(model$residuals) == 1),]
+
+d2q1 = d2q1[,1:(ncol(d2q1)-2)]
+# (filt 14,355 genes)
+filt = filt[,1:(ncol(filt)-2)]
+colnames(filt)=colnames(d2q1)
+# filt (24,755 genes)
+filt = rbind(filt,d2q1[which(sign(model$residuals) == -1),])
+#filts = t(apply(as.matrix(filt), 1, scale))
+#colnames(filts)=colnames(d2q1)
+colnames(filt)=colnames(d2q1)
+y = DGEList(counts=d2q1, group=listcond)
+
+y = calcNormFactors(y)
+@
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+plotMDS(y, labels=colnames(countTable[,c(1:12)]), col = c("red","blue")[factor(listcond)])
+@
+\caption{MDS plot 12 DR and DU samples.}
+\label{MDS}
+\end{figure}
+
+<<echo=TRUE>>=
+y = estimateCommonDisp(y)
+y = estimateTagwiseDisp(y)
+@
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+plotMeanVar(y, show.tagwise.vars=TRUE, NBline=TRUE)
+@
+\caption{MeanVar plot of 12 DR and DU samples.}
+\label{MDS}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+plotBCV(y)
+@
+\caption{BCV plot of 12 DR and DU samples.}
+\label{MDS}
+\end{figure}
+
+<<echo=TRUE>>=
+#dim(32813, 3)
+de = exactTest(y, pair=c("DR","DU"))
+tt = topTags(de, n=nrow(y))
+head(tt$table)
+# ONLY 1 
+length(which((tt$table)$FDR < 0.05))
+
+nc = cpm(y, normalized.lib.sizes=TRUE)
+rn = rownames(tt$table)
+# Sorted in order of lowest FDR from DE comparison
+head(nc[rn,order(listcond)],5)
+
+# just for plotting purposes
+deg = rn[tt$table$FDR < .05] # Only 1
+
+write.csv(tt$table, file="topDEG_DU_DR_NormFDR_Loess.csv")
+@
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+plotSmear(y, de.tags=deg)
+@
+\caption{Plot smear of 12 DR and DU samples.}
+\label{MDS}
+\end{figure}
+
+<<eval=FALSE>>=
+topInfo = cbind(nc[rn,order(listcond)], tt$table)
+
+dev.off()
+for (i in 1:100){
+  gene = topInfo[i,1:12]
+  rep = 6
+  fact = 2
+  dat = data.frame(x=rep(1:fact, each=rep),y=t(gene),z=rep(1:rep, times = fact))
+  colnames(dat)=c("x","y","rep")
+  dat$x=as.factor(dat$x)
+  levels(dat$x)=c("DR","DU")
+  genePlot = ggplot(dat, aes(x, y)) + geom_point(aes(colour = factor(x)), shape = 20, size=5) + scale_shape(solid = FALSE) + ylab("Read Count") + ggtitle(paste("Transcript:", rownames(gene), " FDR: ", topInfo[i,]$FDR)) + scale_y_continuous(limits=c(0, max(dat$y))) + theme(axis.title.x = element_blank(), legend.position="bottom", axis.text=element_text(size=12), axis.title=element_text(size=12), legend.title=element_text(size=12), legend.text=element_text(size=12)) + labs(colour = "Group", size=12) + geom_segment(aes(x = 1, y = mean(dat$y[1:6]), xend = 2, yend = mean(dat$y[7:12])))
+
+  jpeg(file = paste(getwd(), "/DU_DR_Genes_FDR_LOESS/", "Gene_", i, ".jpg", sep=""), height = 700, width = 700)
+  print(genePlot)
+  dev.off()
+}
+@
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%EXTRA DATA QUALITY %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+<<echo=TRUE>>=
+rm(list=ls())
+load("All_wasp.rda")
+listcond = rep(c("DR","DU","F","NR","NU"),each= 6)
+# 157,691 genes
+y = DGEList(counts=countTable, group=listcond)
+
+keep <- rowSums(cpm(y)>1) >= 6
+y <- y[keep, keep.lib.sizes=FALSE] # it seems library sizes are recalculated (y$samples$lib.size = colSums(y$counts))
+
+######################### EXTRA FILTERING AT THIS STEP ########################
+
+RowSD = function(x) {
+  sqrt(rowSums((x - rowMeans(x))^2)/(dim(x)[2] - 1))
+}
+
+yt = y
+yt2 = as.data.frame(yt[[1]])
+y = mutate(yt2, mean = (DR.1+DR.2+DR.3+DR.4+DR.5+DR.6+DU.1+DU.2+DU.3+DU.4+DU.5+DU.6+F.1+F.2+F.3+F.4+F.5+F.6+NR.1+NR.2+NR.3+NR.4+NR.5+NR.6+NU.1+NU.2+NU.3+NU.4+NU.5+NU.6)/ncol(yt2), stdev = RowSD(cbind(DR.1,DR.2,DR.3,DR.4,DR.5,DR.6,DU.1,DU.2,DU.3,DU.4,DU.5,DU.6,F.1,F.2,F.3,F.4,F.5,F.6,NR.1,NR.2,NR.3,NR.4,NR.5,NR.6,NU.1,NU.2,NU.3,NU.4,NU.5,NU.6)))
+rownames(y)=rownames(yt)
+
+# The first quartile threshold of mean counts across the 12 samples
+q1T = as.numeric(summary(y$mean)["1st Qu."])
+# 24,610 genes
+d2q1 = subset(y,mean>q1T)
+# The first quartile threshold of standard deviation across the 12 samples
+q1Ts = as.numeric(summary(d2q1$stdev)["1st Qu."])
+# 18,458 genes
+d2q1 = subset(d2q1,stdev>q1Ts)
+# 14,355
+filt = subset(y,mean<=q1T|stdev<=q1Ts)
+
+model = loess(mean ~ stdev, data=d2q1)
+# 11,998 genes
+d2q1 = d2q1[which(sign(model$residuals) == 1),]
+
+d2q1 = d2q1[,1:(ncol(d2q1)-2)]
+# (filt 14,355 genes)
+filt = filt[,1:(ncol(filt)-2)]
+colnames(filt)=colnames(d2q1)
+# filt (30,670 genes)
+filt = rbind(filt,d2q1[which(sign(model$residuals) == -1),])
+#filts = t(apply(as.matrix(filt), 1, scale))
+#colnames(filts)=colnames(d2q1)
+colnames(filt)=colnames(d2q1)
+y = DGEList(counts=d2q1, group=listcond)
+
+y = calcNormFactors(y)
+@
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+ggparcoord(data.frame(y[[1]]), columns=1:ncol(y[[1]]), alphaLines=0, boxplot=TRUE, scale="globalminmax") + coord_flip() + scale_y_log10()
+@
+\caption{This is all data filtered on CPM and filtered by Loess, then normalized.}
+\label{Boxd2q1}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+ggparcoord(data.frame(y[[1]]), columns=1:6, scale="globalminmax", alphaLines = 0.07)
+@
+\caption{DR PCP}
+\label{Boxd2q1s}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+ggparcoord(data.frame(y[[1]]), columns=7:12, scale="globalminmax", alphaLines = 0.07)
+@
+\caption{DU PCP}
+\label{Boxd2q1s}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+ggparcoord(data.frame(y[[1]]), columns=13:18, scale="globalminmax", alphaLines = 0.07)
+@
+\caption{F PCP}
+\label{Boxd2q1s}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+ggparcoord(data.frame(y[[1]]), columns=19:24, scale="globalminmax", alphaLines = 0.07)
+@
+\caption{NR PCP}
+\label{Boxd2q1s}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=TRUE>>=
+ggparcoord(data.frame(y[[1]]), columns=25:30, scale="globalminmax", alphaLines = 0.07)
+@
+\caption{NU PCP}
+\label{Boxd2q1s}
+\end{figure}
+
+\end{document}

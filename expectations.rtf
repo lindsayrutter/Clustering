@@ -84,4 +84,10 @@ check dispersion (edgeR paper has suggestions on checking dispersion)\
 		- cpm.y.new <- cpm(y, TRUE, TRUE)\
 		- mds <- plotMDS(cpm.y.new)\
 		- scatmat(data.frame(cpm.y.new)[,c(9,13,14,12,16,17)])\
-		- ggparcoord(data.frame(cpm.y.new), columns=1:17, alphaLines=0, boxplot=TRUE, scale="globalminmax") + coord_flip()}
+		- ggparcoord(data.frame(cpm.y.new), columns=1:17, alphaLines=0, boxplot=TRUE, scale="globalminmax") + coord_flip()\
+\
+- remove lowest repetition count after do cpm()\
+- scale or not scale?\
+- edgeR not eliminate so many low mean and low stdev?\
+\
+}

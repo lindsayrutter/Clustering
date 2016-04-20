@@ -14,7 +14,7 @@ leaves.all <- ct2\cf0 \
 \i\b ct2 is the raw read counts
 \i0\b0 \
 \
-\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardeftab720\pardirnatural
 
 \i \cf0 I can check the normalization with the function:
 \i0\fs24 \
@@ -27,17 +27,19 @@ leaves.all <- ct2\cf0 \
 \
 libSizes = 6506441 7110264 7549147 4103272 5918197 7070497 7055909 6129748 6639789 6507218 3730254 6277698 7147623 5997404 7995840 7757889 8210914\
 \
-\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardeftab720\pardirnatural
 
 \i \cf0 The DGEList() function adds the lib.size (number of reads in each sample) and the norm.factors (which are listed as all 1s)
 \i0 \
 \cf3 y <- DGEList(counts=ct2)\cf0 \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardeftab720\pardirnatural
 
-\i\b y is a list with two data frames. One has ct2 raw read counts, the other has libSizes
+\i\b \cf0 y is a list with two data frames. One has ct2 raw read counts, the other has libSizes
 \i0\b0 \
 \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardeftab720\pardirnatural
 
-\i The cpm() function converts the counts to counts per million, and the two boolean values of TRUE put the data on a log-scale and uses the default normalization library. CPM values are useful descriptive measures for the expression level of a gene or transcript. By default, the normalized library sizes are used in the computation for DGEList objects but simple column sums for matrices.
+\i \cf0 The cpm() function converts the counts to counts per million, and the two boolean values of TRUE put the data on a log-scale and uses the default normalization library. CPM values are useful descriptive measures for the expression level of a gene or transcript. By default, the normalized library sizes are used in the computation for DGEList objects but simple column sums for matrices.
 \i0 \
 \pard\pardeftab720
 \cf3 cpm.y.new <- cpm(y, TRUE, TRUE)\cf0 \
@@ -48,25 +50,28 @@ libSizes = 6506441 7110264 7549147 4103272 5918197 7070497 7055909 6129748 66397
 
 \i\b (In this dataset, about half of cpm.y.new read counts >1). Why in at least two samples?
 \i0\b0 \
-\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardeftab720\pardirnatural
 
 \i \cf0 I then retain the genes that have a cpm count of greater than one in at least two samples. This reduces the gene size to 32,554. I then renormalize, and ensure that I have the leaves labeled correctly.
 \i0 \
 \cf3 y <- y[rowSums(cpm.y.new>1)>=2,]\cf0 \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardeftab720\pardirnatural
 
 \b \cf4 Why not redo y <- DGEList(counts = y[[1]])
 \b0 \cf0 \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardeftab720\pardirnatural
 \cf3 cpm.y.new <- cpm(y, TRUE, TRUE)\cf0 \
 \pard\pardeftab720
 \cf0 \
-\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardeftab720\pardirnatural
 
 \i\b \cf0 I try three possible normalization options in the calcNormFactors() function. The first is the RLE scaling factor method:\
 CalNormFactors() changes the y[[2]]$norm.factors\
 ex. \cf5 0.9864356 0.9625308 0.9469569 0.9809148
 \i0\b0\fs24 \cf0 \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardeftab720\pardirnatural
 
-\fs26 y <- calcNormFactors(y, method="RLE")\
+\fs26 \cf0 y <- calcNormFactors(y, method="RLE")\
 \pard\pardeftab720
 \cf0 y$samples$norm.factors\
 	0.9864356 0.9625308 0.9469569 0.9809148 0.9514790 1.0511451 		0.9024940\
@@ -98,4 +103,14 @@ cpm.y.new <- cpm(y, TRUE, TRUE)\
 - no calcNormFactors() in L120.Rnw (but yes in projectReport.Rnw)\
 - betweenLaneNormalization in L120.Rnw (but no in projectReport.Rnw)\
 - when make mds plots? on each cluster? \
+\
+\
+\
+\
+- \
+\
+\
+\
+\
+\
 }
