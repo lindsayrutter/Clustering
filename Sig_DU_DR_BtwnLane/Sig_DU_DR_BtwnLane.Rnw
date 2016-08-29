@@ -27,7 +27,7 @@ opts_chunk$set(fig.path = temppath)
 \section*{Introduction}
 
 This script runs three things:
-1) DU vs DR with calcNormFactors and no filtering
+1) DU vs DR with BtwnLaneNorm and no filtering
   - TopDEG_DU_DR_NoFilter_BtwnLane.csv
   - DU_DR_Genes_NoFilter_BtwnLane/
 2) DU vs DR with BtwnLaneNorm and cpm filtering
@@ -159,13 +159,13 @@ plotSmear(d, de.tags=deg)
 
 <<echo=TRUE>>=
 # Would save file
-write.csv(tt$table, file="TopDEG_DU_DR_NoFilter_CalcNorm.csv")
+write.csv(tt$table, file="TopDEG_DU_DR_NoFilter_BtwnLane.csv")
 @
 
 <<eval=TRUE>>=
 topInfo = cbind(nc[rn,order(listcond)], tt$table)
 
-for (i in 1:100){
+for (i in 1:12){
   gene = topInfo[i,1:12]
   rep = 6
   fact = 2
@@ -173,9 +173,9 @@ for (i in 1:100){
   colnames(dat)=c("x","y","rep")
   dat$x=as.factor(dat$x)
   levels(dat$x)=c("DR","DU")
-  genePlot = ggplot(dat, aes(x, y)) + geom_point(aes(colour = factor(x)), shape = 20, size=5) + scale_shape(solid = FALSE) + ylab("Read Count") + ggtitle(paste("Transcript:", rownames(gene), " FDR: ", topInfo[i,]$FDR)) + scale_y_continuous(limits=c(0, max(dat$y))) + theme(axis.title.x = element_blank(), legend.position="bottom", axis.text=element_text(size=12), axis.title=element_text(size=12), legend.title=element_text(size=12), legend.text=element_text(size=12)) + labs(colour = "Group", size=12) + geom_segment(aes(x = 1, y = mean(dat$y[1:6]), xend = 2, yend = mean(dat$y[7:12])))
+  genePlot = ggplot(dat, aes(x, y)) + geom_point(aes(colour = factor(x)), shape = 20, size=5) + scale_shape(solid = FALSE) + ylab("Read Count") + ggtitle(paste("Transcript:", rownames(gene), " FDR: ", topInfo[i,]$FDR)) + scale_y_continuous(limits=c(0, max(dat$y))) + theme(plot.title = element_text(size=11), axis.title.x = element_blank(), legend.position="bottom", axis.text=element_text(size=12), axis.title=element_text(size=12), legend.title=element_text(size=12), legend.text=element_text(size=12)) + labs(colour = "Group", size=12) + geom_segment(aes(x = 1, y = mean(dat$y[1:6]), xend = 2, yend = mean(dat$y[7:12])))
 
-  jpeg(file = paste(getwd(), "/DU_DR_Genes_NoFilter_CalcNorm/", "Gene_", i, ".jpg", sep=""), height = 700, width = 700)
+  jpeg(file = paste(getwd(), "/DU_DR_Genes_NoFilter_BtwnLane/", "Gene_", i, ".jpg", sep=""), height = 200, width = 275)
   print(genePlot)
   dev.off()
 }
@@ -258,13 +258,13 @@ plotSmear(y, de.tags=deg)
 \end{figure}
 
 <<eval=TRUE>>=
-write.csv(tt$table, file="TopDEG_DU_DR_Filter_CalcNorm.csv")
+write.csv(tt$table, file="TopDEG_DU_DR_Filter_BtwnLane.csv")
 @
 
 <<eval=TRUE>>=
 topInfo = cbind(nc[rn,order(listcond)], tt$table)
 
-for (i in 1:100){
+for (i in 1:10){
   gene = topInfo[i,1:12]
   rep = 6
   fact = 2
@@ -272,9 +272,9 @@ for (i in 1:100){
   colnames(dat)=c("x","y","rep")
   dat$x=as.factor(dat$x)
   levels(dat$x)=c("DR","DU")
-  genePlot = ggplot(dat, aes(x, y)) + geom_point(aes(colour = factor(x)), shape = 20, size=5) + scale_shape(solid = FALSE) + ylab("Read Count") + ggtitle(paste("Transcript:", rownames(gene), " FDR: ", topInfo[i,]$FDR)) + scale_y_continuous(limits=c(0, max(dat$y))) + theme(axis.title.x = element_blank(), legend.position="bottom", axis.text=element_text(size=12), axis.title=element_text(size=12), legend.title=element_text(size=12), legend.text=element_text(size=12)) + labs(colour = "Group", size=12) + geom_segment(aes(x = 1, y = mean(dat$y[1:6]), xend = 2, yend = mean(dat$y[7:12])))
+  genePlot = ggplot(dat, aes(x, y)) + geom_point(aes(colour = factor(x)), shape = 20, size=5) + scale_shape(solid = FALSE) + ylab("Read Count") + ggtitle(paste("Transcript:", rownames(gene), " FDR: ", topInfo[i,]$FDR)) + scale_y_continuous(limits=c(0, max(dat$y))) + theme(plot.title = element_text(size=11), axis.title.x = element_blank(), legend.position="bottom", axis.text=element_text(size=12), axis.title=element_text(size=12), legend.title=element_text(size=12), legend.text=element_text(size=12)) + labs(colour = "Group", size=12) + geom_segment(aes(x = 1, y = mean(dat$y[1:6]), xend = 2, yend = mean(dat$y[7:12])))
 
-  jpeg(file = paste(getwd(), "/DU_DR_Genes_Filter_CalcNorm/", "Gene_", i, ".jpg", sep=""), height = 700, width = 700)
+  jpeg(file = paste(getwd(), "/DU_DR_Genes_Filter_BtwnLane/", "Gene_", i, ".jpg", sep=""), height = 200, width = 275)
   print(genePlot)
   dev.off()
 }
@@ -387,7 +387,7 @@ head(nc[rn,order(listcond)],5)
 # just for plotting purposes
 deg = rn[tt$table$FDR < .05] # Only 1
 
-write.csv(tt$table, file="TopDEG_DU_DR_Filter_Loess_CalcNorm.csv")
+write.csv(tt$table, file="TopDEG_DU_DR_Filter_Loess_BtwnLane.csv")
 @
 
 \begin{figure}[H]
@@ -411,7 +411,7 @@ for (i in 1:100){
   levels(dat$x)=c("DR","DU")
   genePlot = ggplot(dat, aes(x, y)) + geom_point(aes(colour = factor(x)), shape = 20, size=5) + scale_shape(solid = FALSE) + ylab("Read Count") + ggtitle(paste("Transcript:", rownames(gene), " FDR: ", topInfo[i,]$FDR)) + scale_y_continuous(limits=c(0, max(dat$y))) + theme(axis.title.x = element_blank(), legend.position="bottom", axis.text=element_text(size=12), axis.title=element_text(size=12), legend.title=element_text(size=12), legend.text=element_text(size=12)) + labs(colour = "Group", size=12) + geom_segment(aes(x = 1, y = mean(dat$y[1:6]), xend = 2, yend = mean(dat$y[7:12])))
 
-  jpeg(file = paste(getwd(), "/DU_DR_Genes_Filter_Loess_CalcNorm/", "Gene_", i, ".jpg", sep=""), height = 700, width = 700)
+  jpeg(file = paste(getwd(), "/DU_DR_Genes_Filter_Loess_BtwnLane/", "Gene_", i, ".jpg", sep=""), height = 700, width = 700)
   print(genePlot)
   dev.off()
 }

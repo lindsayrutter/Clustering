@@ -149,7 +149,8 @@ plot_clusters = lapply(1:nC, function(i){
   x$cluster2 = factor(x$cluster)
   xNames = rownames(x)
   write.table(xNames, file = paste(getwd(), "/", outDir, "/", plotName, "_", nC, "_", i, ".txt", sep=""), sep=",", row.names=FALSE, col.names=FALSE, quote=FALSE)  
-  p = ggparcoord(x, columns=1:12, groupColumn=14, scale="globalminmax", alphaLines = 0.2) + xlab(paste("Cluster ", i, " (n=", format(nGenes, big.mark=",", scientific=FALSE), ")",sep="")) + ylab("Count") + theme(legend.position = "none", axis.title=element_text(size=12), axis.text=element_text(size=12)) + scale_colour_manual(values = c("color" = colList[i+1]))
+  
+  p = ggparcoord(x, columns=1:12, groupColumn=14, scale="globalminmax", alphaLines = 0.2) + xlab(paste("Cluster ", i, " (n=", format(nGenes, big.mark=",", scientific=FALSE), ")",sep="")) + ylab("Count") + theme(legend.position = "none", axis.title=element_text(size=12), axis.text=element_text(size=12), axis.text.x = element_text(angle = 90, hjust = 1)) + scale_colour_manual(values = c("color" = colList[i+1]))
   fileName = paste(getwd(), "/", outDir, "/", plotName, "_", nC, "_", i, ".jpg", sep="")
   jpeg(fileName)
   plot(p)
@@ -161,9 +162,9 @@ plot_clusters = lapply(1:nC, function(i){
   filts$cluster = "color"
   filts$cluster2 = factor(filts$cluster)
   nGenes = nrow(filts)
-  plot_filtered = ggparcoord(filts, columns=1:12, groupColumn=14, scale="globalminmax", alphaLines = 0.01) + xlab(paste("Filtered (n=", format(nGenes, big.mark=",", scientific=FALSE), ")",sep="")) + ylab("Count") + theme(legend.position = "none", axis.title=element_text(size=12), axis.text=element_text(size=12)) + scale_colour_manual(values = c("color" = colList[1]))
+  plot_filtered = ggparcoord(filts, columns=1:12, groupColumn=14, scale="globalminmax", alphaLines = 0.01) + xlab(paste("Filtered (n=", format(nGenes, big.mark=",", scientific=FALSE), ")",sep="")) + ylab("Count") + theme(legend.position = "none", axis.title=element_text(size=12), axis.text=element_text(size=12), axis.text.x = element_text(angle = 90, hjust = 1)) + scale_colour_manual(values = c("color" = colList[1]))
 ###########################
-  jpeg(file = paste(getwd(), "/", outDir, "/", plotName, "_", nC, ".jpg", sep=""), height = 200 * ceiling((nC+1)/3), width = min(200 * (nC+1), 600))
+  jpeg(file = paste(getwd(), "/", outDir, "/", plotName, "_", nC, ".jpg", sep=""), height = 200 * ceiling((nC+1)/3), width = min(200 * (nC+1), 800))
   # We allow up to 4 (now 3) plots in each column
   p = do.call("grid.arrange", c(append(plot_clusters, list(plot_filtered)), ncol=3)) #change from 4 to 3 ceiling(nC/3)
   invisible(dev.off())
